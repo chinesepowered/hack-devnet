@@ -1,0 +1,771 @@
+<title>Prize Board</title>
+
+<style>
+  :root {
+    --bg:        #ECEEEC;
+    --surface:   #F8F9F7;
+    --surface-2: #E3E7E3;
+    --ink:       #12181A;
+    --ink-2:     #4A5356;
+    --ink-3:     #737D80;
+    --rule:      #D3D9D4;
+    --rule-firm: #B9C2BB;
+    --brass:     #8C6317;
+    --brass-ink: #6E4D10;
+    --brass-wash:rgba(140,99,23,.10);
+    --thin:      #2C6A4B;
+    --thin-wash: rgba(44,106,75,.12);
+    --thick:     #9C4429;
+    --thick-wash:rgba(156,68,41,.12);
+    --mid:       #6A6250;
+    --mid-wash:  rgba(106,98,80,.12);
+
+    --display: Georgia, "Iowan Old Style", "Times New Roman", ui-serif, serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --data: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #0D1214;
+      --surface:   #151B1E;
+      --surface-2: #1D2427;
+      --ink:       #E7ECEA;
+      --ink-2:     #9CA7A6;
+      --ink-3:     #78827F;
+      --rule:      #262E31;
+      --rule-firm: #38423F;
+      --brass:     #D6A55B;
+      --brass-ink: #E5BC7C;
+      --brass-wash:rgba(214,165,91,.13);
+      --thin:      #6FC094;
+      --thin-wash: rgba(111,192,148,.13);
+      --thick:     #E08462;
+      --thick-wash:rgba(224,132,98,.13);
+      --mid:       #B6AA8C;
+      --mid-wash:  rgba(182,170,140,.13);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:        #0D1214;
+    --surface:   #151B1E;
+    --surface-2: #1D2427;
+    --ink:       #E7ECEA;
+    --ink-2:     #9CA7A6;
+    --ink-3:     #78827F;
+    --rule:      #262E31;
+    --rule-firm: #38423F;
+    --brass:     #D6A55B;
+    --brass-ink: #E5BC7C;
+    --brass-wash:rgba(214,165,91,.13);
+    --thin:      #6FC094;
+    --thin-wash: rgba(111,192,148,.13);
+    --thick:     #E08462;
+    --thick-wash:rgba(224,132,98,.13);
+    --mid:       #B6AA8C;
+    --mid-wash:  rgba(182,170,140,.13);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 24px 120px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; }
+  .col  { max-width: 660px; }
+
+  /* ---- masthead ---- */
+
+  header {
+    padding: 72px 0 40px;
+    border-bottom: 1px solid var(--rule-firm);
+    margin-bottom: 44px;
+  }
+  .eyebrow {
+    font-family: var(--data);
+    font-size: 11.5px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin: 0 0 20px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(42px, 8vw, 76px);
+    line-height: 1.0;
+    letter-spacing: -.02em;
+    font-weight: 400;
+    margin: 0 0 22px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 30em;
+    margin: 0 0 30px;
+  }
+  .meta {
+    font-family: var(--data);
+    font-size: 12.5px;
+    color: var(--ink-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    line-height: 1.5;
+  }
+  .meta b { color: var(--ink-2); font-weight: 600; }
+
+  /* ---- the pull quote / core rule ---- */
+
+  .rule-box {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--brass);
+    padding: 30px 34px;
+    margin: 0 0 20px;
+    max-width: 780px;
+  }
+  .rule-box .label {
+    font-family: var(--data);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--brass);
+    display: block;
+    margin-bottom: 14px;
+  }
+  .rule-box q {
+    font-family: var(--display);
+    font-size: 25px;
+    line-height: 1.38;
+    display: block;
+    quotes: "\201C" "\201D";
+    text-wrap: pretty;
+  }
+  .rule-box cite {
+    font-family: var(--data);
+    font-size: 12px;
+    font-style: normal;
+    color: var(--ink-3);
+    display: block;
+    margin-top: 14px;
+  }
+
+  h2 {
+    font-family: var(--display);
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -.012em;
+    margin: 72px 0 6px;
+    text-wrap: balance;
+  }
+  h2 + .sub {
+    color: var(--ink-3);
+    font-size: 15.5px;
+    margin: 0 0 26px;
+    max-width: 56em;
+  }
+  h3 {
+    font-family: var(--display);
+    font-size: 21px;
+    font-weight: 400;
+    margin: 38px 0 10px;
+  }
+  p { margin: 0 0 18px; text-wrap: pretty; }
+  strong { font-weight: 640; }
+  a { color: var(--brass); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, .idea:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 3px;
+  }
+
+  /* ---- tables ---- */
+
+  .scroll { overflow-x: auto; margin: 0 0 14px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 640px;
+    font-size: 14.5px;
+  }
+  th {
+    font-family: var(--data);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    text-align: left;
+    font-weight: 500;
+    padding: 0 16px 10px 0;
+    border-bottom: 1px solid var(--rule-firm);
+    white-space: nowrap;
+  }
+  td {
+    padding: 12px 16px 12px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    color: var(--ink-2);
+  }
+  td:first-child { color: var(--ink); font-weight: 560; }
+  .num {
+    font-family: var(--data);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+  tr.headline td { background: var(--brass-wash); }
+  tr.headline td:first-child { color: var(--brass-ink); }
+  tr.headline .num { color: var(--brass-ink); font-weight: 600; }
+
+  .field {
+    font-family: var(--data);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .f-thin  { color: var(--thin);  background: var(--thin-wash); }
+  .f-mid   { color: var(--mid);   background: var(--mid-wash); }
+  .f-thick { color: var(--thick); background: var(--thick-wash); }
+
+  /* ---- ideas ---- */
+
+  .tier {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin: 60px 0 4px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-firm);
+  }
+  .tier h2 { margin: 0; font-size: 27px; }
+  .tier .note {
+    font-family: var(--data);
+    font-size: 11.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .ideas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 18px;
+    margin-top: 24px;
+  }
+  .idea {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 24px 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .idea.wide { grid-column: 1 / -1; }
+  @media (min-width: 760px) {
+    .idea.wide { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 34px; align-items: start; }
+    .idea.wide .top   { grid-column: 1; }
+    .idea.wide .pitch { grid-column: 1; }
+    .idea.wide .demo  { grid-column: 2; grid-row: 1 / span 3; margin: 0; }
+    .idea.wide .chips { grid-column: 1; }
+  }
+
+  .top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+  }
+  .idea h3 {
+    font-family: var(--display);
+    font-size: 23px;
+    margin: 0;
+    letter-spacing: -.01em;
+  }
+  .reach {
+    font-family: var(--data);
+    font-variant-numeric: tabular-nums;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--brass-ink);
+    white-space: nowrap;
+  }
+  .reach small {
+    display: block;
+    font-size: 9.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 400;
+    text-align: right;
+    margin-top: 1px;
+  }
+  .pitch { margin: 0; font-size: 16px; color: var(--ink); }
+  .demo {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.58;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    padding: 15px 17px;
+    border-radius: 2px;
+  }
+  .demo b {
+    font-family: var(--data);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    display: block;
+    margin-bottom: 7px;
+    font-weight: 500;
+  }
+  .demo em { color: var(--ink); font-style: normal; font-weight: 600; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 4px; }
+  .chip {
+    font-family: var(--data);
+    font-size: 11px;
+    color: var(--ink-2);
+    border: 1px solid var(--rule-firm);
+    border-radius: 2px;
+    padding: 2px 8px;
+    white-space: nowrap;
+  }
+  .chip.key { color: var(--brass-ink); border-color: var(--brass); background: var(--brass-wash); }
+
+  /* ---- recommendation ---- */
+
+  .rec {
+    border-top: 2px solid var(--brass);
+    background: var(--surface);
+    padding: 34px 36px;
+    margin-top: 22px;
+  }
+  .rec h3 { margin-top: 0; font-size: 24px; }
+  .rec h3 + p { margin-bottom: 0; }
+  .rec p:last-child { margin-bottom: 0; }
+  .rec hr { border: 0; border-top: 1px solid var(--rule); margin: 26px 0; }
+
+  ul.tactics { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 16px; }
+  ul.tactics li {
+    padding-left: 20px;
+    position: relative;
+    color: var(--ink-2);
+    font-size: 16px;
+    max-width: 62em;
+  }
+  ul.tactics li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: .62em;
+    width: 7px; height: 7px;
+    background: var(--brass);
+  }
+  ul.tactics b { color: var(--ink); font-weight: 640; }
+
+  footer {
+    margin-top: 76px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--data);
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1.7;
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">DevNetwork · API + Cloud + AI · 2026</p>
+    <h1>Prize Board</h1>
+    <p class="standfirst">Fourteen builds ranked by how much of a $45,500 pool each one can legitimately reach — and which one to actually build.</p>
+    <div class="meta">
+      <span><b>Aug 17 – Sept 3</b> · online + Santa Clara</span>
+      <span><b>544</b> registered</span>
+      <span><b>80+</b> judges</span>
+      <span>Winners announced <b>Sept 3, 3:30 PM PT</b></span>
+    </div>
+  </header>
+
+  <div class="rule-box">
+    <span class="label">The rule that decides everything</span>
+    <q>Teams can solve no challenges (build whatever you want) or can submit to as many challenges as they want.</q>
+    <cite>apiworld.co/hackathon</cite>
+  </div>
+
+  <div class="col">
+    <p>Judging runs in two rounds. <strong>Round 1</strong> scores everything on three things: how much progress you made, whether it solves a real problem, and whether it could become a company. <strong>Round 2</strong> is the sponsor round — each sponsor judges only the projects entered in their challenge and picks their own winners.</p>
+    <p>So your build isn't one bet, it's a portfolio. One project can enter six challenges, each a separate field with separate judges. Optimize for how many tracks a single coherent product can enter <strong>without any integration feeling bolted on</strong> — every sponsor scores integration depth, and a gratuitous API call reads as exactly what it is.</p>
+  </div>
+
+  <h2>The board</h2>
+  <p class="sub">Field reads are estimates based on how easy each API is to bolt on and how late the brief was published.</p>
+
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Track</th>
+          <th class="num">Pot</th>
+          <th>1st / 2nd</th>
+          <th>Really cash?</th>
+          <th>Field</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="headline">
+          <td>Overall Winner</td>
+          <td class="num">$12,500</td>
+          <td>$12,500</td>
+          <td>All cash</td>
+          <td><span class="field f-thick">Everyone</span></td>
+        </tr>
+        <tr>
+          <td>SerpApi — Best AI use case</td>
+          <td class="num">$3,000</td>
+          <td>$1k + $1k credits / $500 + $500</td>
+          <td>Half credits</td>
+          <td><span class="field f-thick">Crowded</span></td>
+        </tr>
+        <tr>
+          <td>Perfect Corp — AI consumer</td>
+          <td class="num">$2,500</td>
+          <td>$1,500 / $1,000</td>
+          <td><strong>All cash</strong></td>
+          <td><span class="field f-thick">Crowded</span></td>
+        </tr>
+        <tr>
+          <td>Xano — Rebuild a SaaS tool</td>
+          <td class="num">$2,500</td>
+          <td>$1k + credit / $500 + credit</td>
+          <td>Mostly</td>
+          <td><span class="field f-mid">Medium</span></td>
+        </tr>
+        <tr>
+          <td>name.com — Domain API</td>
+          <td class="num">$2,000</td>
+          <td>$1,500 / $500</td>
+          <td>Amazon GC</td>
+          <td><span class="field f-mid">Medium</span></td>
+        </tr>
+        <tr>
+          <td>Nutrient — DWS documents</td>
+          <td class="num">$1,500</td>
+          <td>$750 Visa / $250 + credits</td>
+          <td>Mostly</td>
+          <td><span class="field f-thin">Thin</span></td>
+        </tr>
+        <tr>
+          <td>Doctavian — Docs + signing</td>
+          <td class="num">$1,000</td>
+          <td>$500 + sub / $200 + sub</td>
+          <td>Part sub</td>
+          <td><span class="field f-thin">Thin</span></td>
+        </tr>
+        <tr>
+          <td>Foxit</td>
+          <td class="num">$1,000</td>
+          <td>Brief pending</td>
+          <td>—</td>
+          <td><span class="field f-thin">Thin</span></td>
+        </tr>
+        <tr>
+          <td>Apptio (IBM)</td>
+          <td class="num">$1,000</td>
+          <td>Brief pending</td>
+          <td>—</td>
+          <td><span class="field f-thin">Thin</span></td>
+        </tr>
+        <tr>
+          <td>useBruno</td>
+          <td class="num">$1,000</td>
+          <td>Brief pending</td>
+          <td>—</td>
+          <td><span class="field f-thin">Thinnest</span></td>
+        </tr>
+        <tr>
+          <td>Wundergraph</td>
+          <td class="num">$1,000</td>
+          <td>Brief pending</td>
+          <td>—</td>
+          <td><span class="field f-thin">Thinnest</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>The headline pool is $45,500; the tracks above account for roughly <strong>$28,000 in cash and gift cards</strong>. The rest is credits, conference passes, and hardware.</p>
+    <p>Two things fall out of this table. First, <strong>credits are not cash</strong> — SerpApi's $3,000 is really $1,500 cash, Nutrient's $1,500 is really $1,000. Second, the unglamorous tracks pay nearly as well as the glamorous ones and will draw a fraction of the entries. Sweeping Nutrient + Doctavian + Foxit is worth more than second place in Perfect Corp, and it's far more likely.</p>
+  </div>
+
+  <h2>API reality check</h2>
+  <p class="sub">Verified against each sponsor's live documentation, most of which publishes <code>llms.txt</code>.</p>
+
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>API</th><th>What you actually get</th><th>Friction</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Nutrient DWS</td>
+          <td>Extraction → JSON with confidence scores; convert, merge, OCR, watermark; viewer; redaction; eSign; PDF/UA</td>
+          <td><span class="field f-thin">Lowest</span> 5k credits/mo free, no card</td>
+        </tr>
+        <tr>
+          <td>SerpApi</td>
+          <td>100+ engines — Google AI Mode &amp; AI Overview, Shopping, Maps, Scholar, Flights, Amazon, Walmart, reviews</td>
+          <td><span class="field f-thin">Lowest</span> One GET, JSON out</td>
+        </tr>
+        <tr>
+          <td>name.com</td>
+          <td>Search, availability (50/call), batch ZoneCheck, full DNS CRUD, DNSSEC, vanity NS, transfers, WHOIS privacy</td>
+          <td><span class="field f-thin">Low</span> Basic auth, sandbox env</td>
+        </tr>
+        <tr>
+          <td>Foxit</td>
+          <td>PDF Services (convert / merge / extract / optimize), Document Generation, eSign, Embed viewer</td>
+          <td><span class="field f-thin">Low</span> Free dev account, no card</td>
+        </tr>
+        <tr>
+          <td>useBruno</td>
+          <td><code>.bru</code> files, CLI + CI, OpenAPI import/export <em>and sync</em>, <code>bru.ctx</code> custom apps, GraphQL/gRPC/WS</td>
+          <td><span class="field f-thin">Low</span> Open source, local</td>
+        </tr>
+        <tr>
+          <td>Perfect Corp</td>
+          <td>Skin Analysis (14 concerns + skin age), <strong>Aging Simulation</strong>, 50+ try-ons: makeup, hair, clothes, jewelry</td>
+          <td><span class="field f-mid">Medium</span> Console signup, trial credits</td>
+        </tr>
+        <tr>
+          <td>Xano</td>
+          <td>Postgres with vector fields, auth + RBAC, triggers, background tasks, realtime, <strong>MCP Builder + AI agents</strong></td>
+          <td><span class="field f-mid">Medium</span> Budget a day to learn</td>
+        </tr>
+        <tr>
+          <td>Doctavian</td>
+          <td>Template generation with conditional rules, signing, verification. Headless, API-first</td>
+          <td><span class="field f-mid">Medium</span> Trial signup, docs offsite</td>
+        </tr>
+        <tr>
+          <td>Wundergraph Cosmo</td>
+          <td>Federated GraphQL, Go router, schema registry with breaking-change detection, tracing, MCP Gateway</td>
+          <td><span class="field f-thick">Medium-high</span> Real setup cost</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Note two accidental gifts. Perfect Corp ships an <strong>Aging Simulation</strong> endpoint off the shelf. And Nutrient's own marketing sells <em>deterministic, auditable</em> output — which is, word for word, what their challenge brief asks you to demonstrate.</p>
+  </div>
+
+  <div class="tier">
+    <h2>Tier 1 — build one of these</h2>
+    <span class="note">Reach = pot you can legitimately enter</span>
+  </div>
+
+  <div class="ideas">
+
+    <article class="idea wide">
+      <div class="top">
+        <h3>Denial</h3>
+        <span class="reach">$9,000<small>reach</small></span>
+      </div>
+      <p class="pitch">Fight a medical bill or an insurance denial. Drop in the letter; it finds the errors, prices every line against real market rates, and hands you a signed appeal ready to send.</p>
+      <p class="demo"><b>The demo</b>Drag in a scary $18,400 bill → the PDF redlines itself live → <em>4 duplicate charges, 2 upcoded CPT codes, $4,231 recoverable</em> → one click → the appeal letter generates and self-signs. ~100M Americans carry medical debt; the startup case is already proven by Goodbill and Claimable.</p>
+      <div class="chips">
+        <span class="chip key">Nutrient — extract + redact PHI</span>
+        <span class="chip key">Doctavian — generate + sign</span>
+        <span class="chip">SerpApi — real pricing</span>
+        <span class="chip">Foxit — annotated render</span>
+        <span class="chip">Xano — "the billing portal you hate"</span>
+      </div>
+    </article>
+
+    <article class="idea wide">
+      <div class="top">
+        <h3>Lookalike</h3>
+        <span class="reach">$10,000<small>reach</small></span>
+      </div>
+      <p class="pitch">The scam interceptor for your parents. Forward a suspicious letter, email, or link — ten seconds later you know whether it's a scam and exactly why.</p>
+      <p class="demo"><b>The demo</b>Paste <code>chase-secure-verify.com</code> → registered 3 days ago, DNS on a bulk host, no matching business record, 41 sibling typosquats still unregistered → <em>96% scam</em> → generates a one-page explainer for the family plus a signed FTC complaint. Elder fraud runs ~$3.4B a year.</p>
+      <div class="chips">
+        <span class="chip key">name.com — ZoneCheck + DNS forensics</span>
+        <span class="chip key">SerpApi — does this business exist?</span>
+        <span class="chip">Nutrient — parse the mailed letter</span>
+        <span class="chip">Doctavian — the complaint</span>
+        <span class="chip">Xano</span>
+      </div>
+    </article>
+
+    <article class="idea wide">
+      <div class="top">
+        <h3>Mirror</h3>
+        <span class="reach">$9,000<small>reach</small></span>
+      </div>
+      <p class="pitch">Your face in 20 years, with and without sunscreen. The highest visual impact per hour of work on this entire board.</p>
+      <p class="demo"><b>The demo</b>Webcam → Skin Analysis returns 14 quantified concerns and a skin age → split-screen aging simulation, protected vs. unprotected → <em>silence in the room</em> → real products at real prices → a dermatologist-ready report. Both endpoints exist off the shelf. One person, one or two days.</p>
+      <div class="chips">
+        <span class="chip key">Perfect Corp — analysis + aging</span>
+        <span class="chip">SerpApi — product + price</span>
+        <span class="chip">Doctavian — derm report</span>
+        <span class="chip">Xano</span>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="tier">
+    <h2>Tier 2 — strong, but crowded or narrower</h2>
+  </div>
+
+  <div class="ideas">
+
+    <article class="idea">
+      <div class="top"><h3>Incorporate</h3><span class="reach">$11,000<small>reach</small></span></div>
+      <p class="pitch">Idea to registered company in five minutes: market research → domain search and actual registration → operating agreement and founder vesting, generated and signed.</p>
+      <p class="demo"><b>Watch out</b>Widest reach on the board and a satisfying single funnel — but "AI startup wizard" is a well-worn hackathon shape. Needs a genuinely sharp edge.</p>
+      <div class="chips"><span class="chip">SerpApi</span><span class="chip">name.com</span><span class="chip">Doctavian</span><span class="chip">Nutrient</span><span class="chip">Xano</span><span class="chip">Foxit</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>Lease</h3><span class="reach">$9,000<small>reach</small></span></div>
+      <p class="pitch">Know your tenant rights before you sign. Upload a lease; it flags the clauses that are illegal <em>in your jurisdiction</em> and drafts the demand letter.</p>
+      <p class="demo"><b>Watch out</b>Emotionally strong and mechanically simple. Slightly narrower blast radius than Denial.</p>
+      <div class="chips"><span class="chip">Nutrient</span><span class="chip">SerpApi — local statute</span><span class="chip">Doctavian</span><span class="chip">Foxit</span><span class="chip">Xano</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>When I'm Gone</h3><span class="reach">$8,000<small>reach</small></span></div>
+      <p class="pitch">The folder your family will need. Documents, accounts, domains and instructions in one vault; a signed letter generated for each person; digital-estate and domain transfer handled.</p>
+      <p class="demo"><b>Watch out</b>The most emotionally powerful demo here, and the easiest to get wrong. The line between moving and maudlin is thin.</p>
+      <div class="chips"><span class="chip">Nutrient</span><span class="chip">Doctavian</span><span class="chip">name.com</span><span class="chip">Foxit</span><span class="chip">Xano</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>Grantly</h3><span class="reach">$8,000<small>reach</small></span></div>
+      <p class="pitch">Grant discovery and drafting for small nonprofits. Finds open grants, parses the RFPs, drafts and signs the applications.</p>
+      <p class="demo"><b>Watch out</b>Obvious buyer, obvious ROI, clean business model — but visually the least dramatic idea in this tier.</p>
+      <div class="chips"><span class="chip">SerpApi</span><span class="chip">Nutrient</span><span class="chip">Doctavian</span><span class="chip">Xano</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>Rebuild the DMV</h3><span class="reach">$6,000<small>reach</small></span></div>
+      <p class="pitch">The Xano brief taken literally and at maximum scope: a government form portal that's a conversation instead of a 40-page PDF.</p>
+      <p class="demo"><b>Watch out</b>The best pure play for the Xano prize specifically. Lower ceiling on the overall.</p>
+      <div class="chips"><span class="chip key">Xano</span><span class="chip">Nutrient</span><span class="chip">Doctavian</span><span class="chip">Foxit</span></div>
+    </article>
+
+  </div>
+
+  <div class="tier">
+    <h2>Tier 3 — arbitrage</h2>
+    <span class="note">Best cash per hour, least glory</span>
+  </div>
+
+  <div class="ideas">
+
+    <article class="idea">
+      <div class="top"><h3>Spec to Suite</h3><span class="reach">$3,500<small>reach</small></span></div>
+      <p class="pitch">Drop in a PDF API spec, get back a runnable Bruno collection and a federated Cosmo subgraph.</p>
+      <p class="demo"><b>Why it's here</b>Bruno's OpenAPI sync plus Cosmo's schema registry make this elegant rather than forced. Almost certainly the <em>thinnest field in the hackathon</em> — two $1,000 pots most of 544 participants will ignore entirely.</p>
+      <div class="chips"><span class="chip key">useBruno</span><span class="chip key">Wundergraph</span><span class="chip">Nutrient — parse the spec</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>Cloud Bill Autopsy</h3><span class="reach">$6,500<small>reach</small></span></div>
+      <p class="pitch">Ingest a cloud invoice, benchmark every line against public pricing, generate a signed savings memo for the CFO.</p>
+      <p class="demo"><b>Why it's here</b>Unsexy, and that's the entire point — Apptio's field will be close to empty.</p>
+      <div class="chips"><span class="chip key">Apptio</span><span class="chip">SerpApi</span><span class="chip">Nutrient</span><span class="chip">Doctavian</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>Contract Diff</h3><span class="reach">$6,000<small>reach</small></span></div>
+      <p class="pitch">Deterministic redline between two contract versions, with a full audit trail on every change.</p>
+      <p class="demo"><b>Why it's here</b>Boring — but Nutrient's brief literally asks for "deterministic, auditable output." This is writing straight to the rubric.</p>
+      <div class="chips"><span class="chip key">Nutrient</span><span class="chip">Foxit</span><span class="chip">Doctavian</span><span class="chip">Xano</span></div>
+    </article>
+
+  </div>
+
+  <div class="tier">
+    <h2>Tier 4 — high emotion, higher risk</h2>
+  </div>
+
+  <div class="ideas">
+
+    <article class="idea">
+      <div class="top"><h3>First Day</h3><span class="reach">$6,500<small>reach</small></span></div>
+      <p class="pitch">Photograph any official letter; get it explained in your language and the response form filled out.</p>
+      <p class="demo"><b>The risk</b>Enormous emotional weight. Stay firmly on the explanation side of the line — never give legal advice.</p>
+      <div class="chips"><span class="chip">Nutrient</span><span class="chip">SerpApi</span><span class="chip">Doctavian</span><span class="chip">Foxit</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>Closet</h3><span class="reach">$8,000<small>reach</small></span></div>
+      <p class="pitch">Try on a secondhand listing before you buy it. Clothes try-on wired to live resale inventory.</p>
+      <p class="demo"><b>The risk</b>Fun, visual and sustainable — but a commercially crowded space that judges have seen pitched before.</p>
+      <div class="chips"><span class="chip key">Perfect Corp</span><span class="chip">SerpApi</span><span class="chip">Xano</span></div>
+    </article>
+
+    <article class="idea">
+      <div class="top"><h3>Unsubscribe</h3><span class="reach">$8,000<small>reach</small></span></div>
+      <p class="pitch">The cancellation agent. Parses your statement for forgotten subscriptions, finds each company's real cancellation policy, generates and signs the letters.</p>
+      <p class="demo"><b>The risk</b>The funniest demo on this list, and judges remembering you is worth more than it sounds. Weakest startup story of the fourteen.</p>
+      <div class="chips"><span class="chip">SerpApi</span><span class="chip">Nutrient</span><span class="chip">Doctavian</span><span class="chip">Xano</span></div>
+    </article>
+
+  </div>
+
+  <h2>The call</h2>
+
+  <div class="rec">
+    <h3>Build Denial as the primary</h3>
+    <p>It has the best combination of the four things that matter: a problem every judge has personally suffered, a demo with a number that lands like a punch, five tracks it enters without a single forced integration, and a startup story you can give in one sentence. Round 1 asks for progress, a real problem, and feasibility — all three are layups.</p>
+    <hr>
+    <h3>If you'd rather chase breadth, build Lookalike</h3>
+    <p>It reaches $10,000 across six tracks, and it's the only concept here that makes name.com's $2,000 genuinely winnable — the domain API does real forensic work rather than getting name-dropped. Most entrants in that track will fake exactly what this one does for real.</p>
+    <hr>
+    <h3>Either way, run Mirror in parallel</h3>
+    <p>Perfect Corp is the partner sponsor, pays $2,500 in straight cash, and both endpoints Mirror needs already exist. One person can build it in a day. It's the cheapest incremental expected value on the board — and it covers the visual-spectacle angle that a document tool structurally cannot. If you have a fifth person with a spare afternoon, point them at Spec to Suite: two $1,000 pots the field will leave uncontested.</p>
+  </div>
+
+  <h2>Tactics that matter more than the idea</h2>
+
+  <ul class="tactics">
+    <li><b>Get every API key before Aug 17.</b> Nutrient, SerpApi and Foxit are instant and free. Perfect Corp, Doctavian and Xano have signup flows that can eat a day. You have five days of runway — spend them on credentials, not code.</li>
+    <li><b>Write a separate "where this sponsor does essential work" paragraph for every track you enter.</b> Sponsors score integration depth and they read these. One generic writeup submitted six times is how strong projects lose thin fields.</li>
+    <li><b>Budget a full day for the demo video.</b> Most tracks want 2–4 minutes; Perfect Corp wants 1–3. It's the highest-leverage hour of the hackathon and the thing every team under-invests in.</li>
+    <li><b>Build the audit view.</b> Nutrient asks for deterministic, auditable output with a human in the loop. A visible diff/confidence/override panel is a feature you'd want anyway, and it turns one track from a maybe into a likely.</li>
+    <li><b>Frame Xano correctly.</b> The track is "rebuild a SaaS tool you <em>hate</em>." Name the incumbent out loud in the writeup — the patient billing portal, the DMV site — and tell the build story they explicitly ask for.</li>
+    <li><b>Be in the room on Sept 2–3.</b> Winners are announced live, several tracks require exit interviews, and 80+ judges circulating in person is not a channel to skip.</li>
+  </ul>
+
+  <footer>
+    Compiled 12 Aug 2026 from the Devpost listing, apiworld.co/hackathon, and each sponsor's live API documentation.<br>
+    Foxit, Apptio, useBruno and Wundergraph briefs were still marked "Coming Soon" — re-check those before locking scope.
+  </footer>
+
+</div>
