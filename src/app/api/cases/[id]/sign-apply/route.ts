@@ -30,6 +30,17 @@ export async function POST(
       { status: 409 },
     );
   }
+  // Same guard as sign-request: without the bytes there is nothing to sign,
+  // and the hash check below would otherwise compare two empty documents.
+  if (!record.document.pdfBase64) {
+    return NextResponse.json(
+      {
+        error:
+          "the document is no longer available on this server — regenerate the letter and request a new signature",
+      },
+      { status: 409 },
+    );
+  }
 
   const body = (await request.json().catch(() => ({}))) as {
     typedSignature?: string;

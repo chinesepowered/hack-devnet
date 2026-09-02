@@ -5,7 +5,7 @@
  * same adapters the app uses, so if this passes, the fallback path is sound.
  */
 
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 
 import { extractBill } from "../src/lib/adapters/nutrient";
 import { auditBill } from "../src/lib/adapters/llm";
@@ -204,6 +204,7 @@ async function runOne(sampleId: string, writePdf: boolean) {
   console.log(`[BOUNDARY] replay     second signature on a spent envelope rejected`);
 
   if (writePdf) {
+    mkdirSync("tmp-artifacts", { recursive: true });
     const out = "tmp-artifacts/signed-dispute-letter.pdf";
     writeFileSync(out, Buffer.from(signed.data.signedPdfBase64, "base64"));
     console.log(`\n  wrote ${out}`);

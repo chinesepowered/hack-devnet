@@ -52,13 +52,15 @@ export async function saveCase(record: CaseRecord): Promise<AdapterResult<CaseRe
       const saved = await vendorJson<CaseRecord>(xanoUrl("/case"), {
         method: "POST",
         headers: xanoHeaders(),
-        body: JSON.stringify(record),
+        body: JSON.stringify(withoutBlob(record)),
       });
       // Mirror locally so a mid-demo Xano outage cannot orphan an open case.
-      localCases.set(record.id, { ...record, ...saved, id: record.id });
+      // `record` wins on the document, since Xano never receives the PDF bytes.
+      const merged = { ...record, ...saved, id: record.id, document: record.document };
+      localCases.set(record.id, merged);
       trimLocalStore();
       return {
-        data: { ...record, ...saved, id: record.id },
+        data: merged,
         vendor: "xano",
         provenance: "live",
         note: `Case ${record.id} persisted to Xano with ${record.trail.length} audit entries`,
@@ -89,18 +91,42 @@ export async function saveCase(record: CaseRecord): Promise<AdapterResult<CaseRe
   };
 }
 
+/**
+ * Generated PDFs are megabytes of base64. Sending them to a records API is a
+ * good way to hit a payload limit mid-demo, and they do not round-trip
+ * reliably, so the document blob stays local and only its metadata is
+ * persisted remotely.
+ */
+function withoutBlob(record: Partial<CaseRecord>): Partial<CaseRecord> {
+  if (!record.document) return record;
+  return { ...record, document: { ...record.document, pdfBase64: "" } };
+}
+
 export async function getCase(id: string): Promise<CaseRecord | undefined> {
+  const local = localCases.get(id);
+
   if (vendorLive("xano")) {
     try {
       const remote = await vendorJson<CaseRecord>(xanoUrl(`/case/${encodeURIComponent(id)}`), {
         headers: xanoHeaders(),
       });
-      if (remote?.id) return remote;
+      if (remote?.id) {
+        // Xano is the record of truth for everything except the PDF bytes,
+        // which never left this process — merge rather than replace, or
+        // signing and download break whenever Xano is configured. Prefer the
+        // local mirror but keep whatever the remote holds when it is cold,
+        // rather than erasing bytes a previous build did persist.
+        const pdfBase64 =
+          local?.document?.pdfBase64 || remote.document?.pdfBase64 || "";
+        return remote.document
+          ? { ...remote, document: { ...remote.document, pdfBase64 } }
+          : { ...remote, document: local?.document };
+      }
     } catch {
       // Fall through to the local mirror.
     }
   }
-  return localCases.get(id);
+  return local;
 }
 
 export async function listCases(): Promise<{ cases: CaseRecord[]; provenance: "live" | "fallback" }> {
@@ -135,7 +161,7 @@ export async function updateCase(
       await vendorJson(xanoUrl(`/case/${encodeURIComponent(id)}`), {
         method: "PATCH",
         headers: xanoHeaders(),
-        body: JSON.stringify(patch),
+        body: JSON.stringify(withoutBlob(patch)),
       });
     } catch {
       // Local mirror below still reflects the change.

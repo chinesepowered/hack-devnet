@@ -11,7 +11,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "shots": "node scripts/shots.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.0",

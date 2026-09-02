@@ -28,6 +28,18 @@ export async function POST(
       { status: 409 },
     );
   }
+  // The document blob lives in this process, not in the records backend. If it
+  // is gone — a restart, another instance, an evicted mirror — refuse rather
+  // than mint an envelope and hash zero bytes.
+  if (!record.document.pdfBase64) {
+    return NextResponse.json(
+      {
+        error:
+          "the generated document is no longer available on this server — regenerate the letter before requesting a signature",
+      },
+      { status: 409 },
+    );
+  }
 
   const body = (await request.json().catch(() => ({}))) as {
     signerEmail?: string;

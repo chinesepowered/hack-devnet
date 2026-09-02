@@ -30,6 +30,7 @@ interface always tells you which mode each stage ran in. Add credentials wheneve
 cp .env.example .env.local    # fill in whatever you have
 pnpm doctor                   # reports what will run live vs. fallback, and probes the keys
 pnpm smoke                    # exercises the whole pipeline from the CLI, no browser needed
+pnpm shots                    # walks the demo and writes screenshots to tmp-artifacts/
 ```
 
 In the app, press **D** to run the entire demo hands-free.
