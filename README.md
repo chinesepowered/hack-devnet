@@ -1,130 +1,60 @@
 # BillShield
 
-**Reads a hospital bill, finds the billing errors, proves the prices are inflated, and hands you a signed dispute letter with a record of every step.**
-
-Four in five itemized hospital bills contain an error. Almost nobody reads them, because reading
-one means knowing that CPT 80053 already contains the creatinine test billed three lines below it,
-and that a hospital cannot charge you separately for the surgical tray. BillShield knows.
-
-Point it at a bill and it opens a case, extracts every line item with a confidence score, stops and
-asks a human about anything it wasn't sure of, finds the duplicated and unbundled and unsupported
-charges, prices each one against published rates and live market data, writes a dispute letter that
-argues each finding with its authority, and takes it to a human signature — leaving behind an audit
-trail a regulator could follow.
-
-On the built-in emergency-room sample, that is **$18,400 billed → $7,144 owed**.
-
----
-
-## Run it
+**Reads a hospital bill, finds the billing errors, proves the prices are inflated, and hands you a signed dispute letter with a record of every step.** Six sponsor APIs each own one stage of that pipeline, and every one of them has a working fallback, so the whole thing runs end to end on zero credentials. On the built-in emergency-room sample: **$18,400 billed → $7,144 owed.**
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:3000
+pnpm dev          # http://localhost:3000 — then press D to run the whole demo
 ```
 
-That's the whole setup. **No API keys are required** — every vendor has a working fallback, and the
-interface always tells you which mode each stage ran in. Add credentials whenever you like:
-
-```bash
-cp .env.example .env.local    # fill in whatever you have
-pnpm doctor                   # reports what will run live vs. fallback, and probes the keys
-pnpm smoke                    # exercises the whole pipeline from the CLI, no browser needed
-pnpm shots                    # walks the demo and writes screenshots to tmp-artifacts/
-```
-
-In the app, press **D** to run the entire demo hands-free.
+No API keys required. `pnpm doctor` reports what will run live vs. fallback; `pnpm smoke` exercises the entire pipeline from the CLI in two seconds. **`/judges`** in the app is a live scorecard where you can kill any vendor and re-run.
 
 ---
 
-## The pipeline
+## The problem
 
-Six APIs, each owning one stage. Every stage is independently observable and independently
-survivable.
+Four in five itemized hospital bills contain an error, and almost nobody catches one. Catching one
+means knowing that CPT 80053 already contains the creatinine assay billed three lines below it, that
+a hospital cannot charge you separately for the surgical tray, and that a single encounter supports
+a single evaluation-and-management code. The people who know that work for the hospital.
 
-| Stage | API | What it actually does |
-|---|---|---|
-| **Extract** | Nutrient DWS | Parses the PDF into typed line items with per-field confidence, using the Data Extraction API against a bill schema we define. |
-| **Review** | *a human* | Rows scoring below 0.90 stop here. Nothing uncertain reaches the letter unconfirmed. |
-| **Audit** | Claude | Reads the encounter as a whole and finds what a rules engine can't, then rewrites the machine-authored rationales into an argument that persuades. |
-| **Benchmark** | SerpApi | Turns "this seems expensive" into evidence: what other providers publish for the same code, today, with sources. |
-| **Draft** | Doctavian | Renders the letter from a template that branches, loops, and calculates. |
-| **Sign** | Foxit eSign | Carries the letter across the signing boundary to a person. |
-| *(throughout)* | Xano | Backend of record: cases, findings, and the audit trail that gets printed into the signed PDF. |
+So the errors stand. A duplicated visit code, a lab panel billed alongside its own components, eight
+litres of saline for an outpatient wrist injury — each one survives because reading the bill
+properly is specialist work that nobody does for free.
 
----
+## The solution
 
-## Three things worth looking at
+Point BillShield at a bill. It opens a case, extracts every line item with a confidence score, and
+**stops** — anything the parser wasn't sure of goes to a human before it can be used. Then it finds
+the duplicated, unbundled, and unsupported charges from published coding rules, prices each one
+against Medicare rates and live market data, writes a dispute letter that argues every finding with
+its authority, and takes that letter to a **human signature**.
 
-### 1. The audit is a real rules engine, not a prompt
+What comes out is a signed, tamper-evident PDF whose last page is every step taken to produce it —
+which system did what, and where a person stood behind it.
 
-`src/lib/audit-rules.ts` finds structural billing errors from published coding rules alone, with no
-model in the loop: exact duplicates, multiple evaluation-and-management codes for one encounter,
-panels billed alongside their own components, supplies that belong inside a facility fee, imaging of
-a body region nothing else on the bill treats, quantities beyond what one encounter supports, and
-charges above a markup threshold that scales with what the service is.
+Three design decisions carry the build:
 
-Claude runs *on top of* that, never instead of it. Every finding the model returns is validated
-against real line ids and clamped to what those lines were actually charged, so a hallucinated
-number cannot reach the letter. The audit stage reports how many model findings it rejected.
-
-Two consequences: the demo produces identical, defensible numbers with no API key at all, and every
-dollar in the letter traces to a rule you can read.
-
-### 2. The signing boundary is enforced in code
-
-Foxit's challenge leaves signing out of the agent's tool catalogue on purpose and invites an
-argument about where the boundary belongs. Ours: **not at "signing" as an operation — at
-reversibility.**
-
-Everything else here is undoable. Generate the wrong letter, convert it, merge it, hash it; redo any
-of it and nothing in the world has changed. A signature is different in kind: it is the agent making
-a legal assertion in a person's name, and there is no undo.
-
-So `requestSignature()` is the agent's last unilateral act — it prepares an envelope and stops.
-`applySignature()` demands three things the agent cannot produce: a human confirmation, a single-use
-intent token minted at preparation, and a document hash that still matches what was presented. An
-agent that gets confused, is prompt-injected by a malicious bill, or simply loops can waste tokens
-and produce a wrong letter. It cannot produce a *signed* one.
-
-There's a button in the UI that has the agent try anyway. It gets a 403. `pnpm smoke` asserts it.
-
-We also hash *before* presenting rather than after signing, so the signer sees the hash of what
-they're about to sign and an agent that alters the document in between invalidates its own envelope.
-
-### 3. Every vendor can be killed mid-demo
-
-Open `/judges` and click any vendor chip to switch it off, then run the pipeline again. It completes
-either way; the stage badge flips to `fallback` and the audit trail records exactly why. The
-fallbacks aren't stubs — the local parser is the same parser the live path uses, the local letter
-renderer implements the same template semantics, and the local signing ceremony still produces a
-real, hashed, audit-stamped PDF.
-
-This is the difference between a demo that survives conference wifi and one that doesn't.
+- **The audit is a rules engine, not a prompt.** Structural findings come from published coding
+  rules with no model in the loop. Claude runs on top and never instead; every finding it returns is
+  validated against real line IDs and clamped to what those lines were charged. Pull the API key and
+  the numbers don't move.
+- **The signing boundary sits at reversibility.** The agent owns everything undoable and stops at
+  the one thing that isn't. It has no code path that can produce a signature.
+- **Every vendor can fail.** Each stage degrades to a real fallback and says so on screen.
 
 ---
 
-## Layout
+## Sponsor summary
 
-```
-src/
-  lib/
-    audit-rules.ts          deterministic billing-error detection
-    letter-template.ts      the branching/looping/calculating letter
-    pdf.ts                  local PDF rendering + signature stamping
-    fixtures/
-      reference-prices.ts   published rates, bundling rules, pricing tiers
-      bills.ts              three realistic bills with genuine errors planted
-    adapters/
-      nutrient.ts  llm.ts  serpapi.ts  doctavian.ts  foxit.ts  xano.ts
-  app/
-    api/cases/[id]/...      one route per pipeline stage
-    judges/                 sponsor scorecard + the chaos switch
-  components/               the studio UI
-scripts/
-  doctor.ts                 pre-demo credential check
-  smoke.ts                  full pipeline test, including boundary assertions
-```
+| Sponsor | Stage it owns | What breaks without it | Where |
+|---|---|---|---|
+| **Nutrient DWS** | Document intake | Typed extraction with per-field confidence, and the human-review gate it triggers | `src/lib/adapters/nutrient.ts` |
+| **Claude** | Judgement over the rules engine | Findings a table lookup can't make, and the persuasive rewrite of every rationale | `src/lib/adapters/llm.ts` |
+| **SerpApi** | Price evidence | Live market prices with sources, embedded in the letter | `src/lib/adapters/serpapi.ts` |
+| **Doctavian** | Document generation | A letter that branches, loops, and calculates per bill | `src/lib/letter-template.ts`, `adapters/doctavian.ts` |
+| **Foxit eSign** | The signing boundary | The envelope, the hash, and the handoff to a person | `src/lib/adapters/foxit.ts` |
+| **Xano** | Backend of record | Cases, findings, and the audit trail printed into the signed PDF | `src/lib/adapters/xano.ts` |
 
 Every adapter returns an `AdapterResult` carrying not just data but **where the data came from** —
 `live` or `fallback`, with a human-readable note. The UI renders that provenance and the audit trail
@@ -132,20 +62,127 @@ records it, so nothing on screen is a claim you can't verify.
 
 ---
 
-## Notes and honesty
+## How we leveraged each sponsor
 
-- **Reference rates** approximate Medicare fee-schedule national averages. They're a defensible
-  anchor, not a live CMS feed; a production build would pull the actual schedules.
-- **Markup findings scale by service type.** A saline bag at 90× the published rate is
-  indefensible; a surgical procedure at 10× is ordinary hospital chargemaster behaviour, because the
-  charge bundles facility costs the professional fee schedule doesn't cover. Flagging both the same
-  way would make the audit look like it just disputes everything. No single pricing finding asks for
-  more than 60% of a line.
-- **Findings that need the medical record say so.** They carry confidence below 0.6, and the letter
-  requests the specific document rather than asserting the charge is wrong.
-- BillShield prepares a dispute; it doesn't give legal or medical advice.
+### Nutrient DWS — document intake and the human-review gate
+
+We POST the bill to the **Data Extraction API** against a typed bill schema we define (provider,
+account, dates, and a `line_items` array of procedure code, description, units, charge). Asking for
+a checkable shape rather than raw text is the point of using a deterministic document platform: any
+field that comes back missing or malformed becomes a review item instead of a silent guess. The
+**Processor API** (`/build` with an OCR action) is the second path when only a text layer is
+available, and the same statement parser runs over both.
+
+Each row is then scored — a code we recognise, a printed description that agrees with that code's
+official wording, a plausible quantity — and anything below **0.90 stops the pipeline**. A real
+statement reads `MISC SUPPLY CHG`, not "Supplies and materials, unspecified", so that mismatch is
+exactly what drives a row to a human. The reviewer confirms, corrects, or removes it, and their name
+and the timestamp land in the audit trail.
+
+> **Verify it:** watch the Extraction stage, then the Review gate that holds everything until a
+> person answers. On the ER sample, 5 of 19 rows stop there.
+
+### Claude — the judgement layer
+
+`src/lib/audit-rules.ts` runs first and always: duplicates, multiple E/M codes for one encounter,
+panels billed with their own components, bundled supplies, imaging of a body region nothing else on
+the bill treats, impossible quantities, and markup above a threshold that scales by service type.
+
+Claude (`claude-opus-5`, structured outputs via Zod) then reads the whole encounter and does two
+things the rules engine can't: finds what only makes sense in context — a chest X-ray on a wrist
+injury — and rewrites the machine-authored rationales into the paragraph a billing manager will
+actually act on. **Every model finding is validated**: it must reference line IDs that exist, and
+its disputed amount is clamped to what those lines were charged. Anything else is rejected outright,
+and the stage note reports how many.
+
+> **Verify it:** the audit stage note reports findings kept, added, rewritten, and rejected. Then
+> pull the key and re-run — the structural numbers are identical.
+
+### SerpApi — turning an opinion into evidence
+
+"This seems expensive" is an opinion. "Here are four providers publishing this exact code at a tenth
+of your price, retrieved today" is evidence, and it goes into the letter with its sources. We query
+per disputed procedure code, pull dollar figures out of organic and shopping results, take the
+median, and skip codes with no published reference rate — a bundled supply has nothing meaningful to
+compare against, and an empty bar chart reads as a bug.
+
+> **Verify it:** open any row in Price evidence for the observed prices and their links. The saline
+> comparison — $137 a litre against a $1.50 published rate — is the one that lands.
+
+### Doctavian — generation with real template logic
+
+The letter is not mail-merge. One structured payload drives a template that **branches** (insured
+vs. self-pay header; a verification paragraph only when a human reviewed something; a regulatory
+escalation clause only above 40% disputed; an itemized records request only for findings below 0.60
+confidence), **loops** (over every finding, and every line item inside each finding), and
+**calculates** (per-section subtotals and the corrected balance).
+
+Live, that payload is uploaded and rendered against a template in the Doctavian workspace, then the
+PDF is downloaded. The local renderer implements the same template semantics, and **both report
+which branches fired** — so the UI can show the template logic doing real work on this particular
+bill rather than asserting that it did.
+
+> **Verify it:** the Draft panel lists every branch evaluated. The ER sample fires 10; the childbirth
+> sample fires a different set, because it crosses no escalation threshold.
+
+### Foxit eSign — the signing boundary, and an argument about where it goes
+
+Foxit leaves signing out of the agent's tool catalogue on purpose and invites a defence. Ours: **the
+boundary does not belong at "signing" as an operation — it belongs at reversibility.**
+
+Everything else here is undoable. Generate the wrong letter, convert it, merge it, hash it; redo any
+of it and nothing in the world has changed. A signature is different in kind: it is the agent making
+a legal assertion in a person's name, and there is no undo.
+
+So `requestSignature()` is the agent's last unilateral act — it creates the envelope through the
+eSign API and stops at `awaiting_signature`. `applySignature()` demands three things the agent
+cannot produce: a **human confirmation**, a **single-use intent token** minted at preparation, and a
+**document hash that still matches** what was presented. An agent that gets confused, is
+prompt-injected by a malicious bill, or simply loops can waste tokens and write a bad letter. It
+cannot produce a *signed* one.
+
+We also hash **before** presenting rather than after signing, so the signer sees the hash of what
+they're about to sign and an agent that alters the document in between invalidates its own envelope.
+
+> **Verify it:** press *Let the agent try to sign it* on any prepared document — the API returns
+> **403**. `pnpm smoke` asserts both that refusal and the rejection of a replayed envelope.
+
+### Xano — the backend of record
+
+Cases, line items, findings, evidence, and the audit trail persist through Xano, and that trail is
+printed as the final page of the signed PDF — so what the screen shows and what the provider
+receives are the same record. Generated PDFs stay in-process rather than being pushed to a records
+API: they're megabytes of base64 that don't round-trip reliably, so only their metadata is
+persisted, and reads merge the local bytes back in.
+
+> **Verify it:** the Audit trail rail, and the same list on the last page of the downloaded PDF.
 
 ---
+
+## Verification
+
+```bash
+pnpm doctor    # which vendors will run live; probes each credential
+pnpm smoke     # all three bills through every stage, plus both boundary assertions
+pnpm shots     # walks the demo and writes screenshots to tmp-artifacts/
+```
+
+`pnpm smoke` also asserts what a demo can't show quickly: that no line is disputed twice, that no
+finding references a line that doesn't exist, and that the disputed total never exceeds the amount
+billed.
+
+## Notes and honesty
+
+- **Reference rates** approximate Medicare fee-schedule national averages — a defensible anchor, not
+  a live CMS feed. Production would pull the actual schedules.
+- **Markup findings scale by service type.** A saline bag at 90× the published rate is indefensible;
+  a surgical procedure at 10× is ordinary chargemaster behaviour, because the charge bundles facility
+  costs the professional fee schedule doesn't cover. Flagging both the same way would make the audit
+  look like it just disputes everything. No single pricing finding asks for more than 60% of a line,
+  and on the ER sample the facility fee survives untouched.
+- **Findings that need the medical record say so** — confidence below 0.60, and the letter requests
+  the specific document rather than asserting the charge is wrong.
+- BillShield prepares a dispute; it does not give legal or medical advice.
 
 ## Keyboard
 
@@ -154,3 +191,5 @@ records it, so nothing on screen is a claim you can't verify.
 | `D` | run the full demo hands-free |
 | `L` | toggle light mode |
 | `R` | reset |
+
+Pitch deck: [`slides.html`](slides.html) · Demo run sheet: [`DEMO.md`](DEMO.md)

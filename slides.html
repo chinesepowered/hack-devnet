@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="BillShield — reads a hospital bill, finds the billing errors, and produces a signed dispute letter.">
+<meta name="theme-color" content="#0d1214">
+<title>BillShield Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /*
+   * BillShield pitch deck.
+   *
+   * Deliberately single-theme: a deck is projected in a dark room, and this
+   * inherits the product's own palette so the deck and the app read as one
+   * object. Every colour is painted explicitly so the page holds on any ground.
+   */
+  :root {
+    --ground: #0d1214;
+    --surface: #141c1f;
+    --surface-2: #1b2528;
+    --ink: #e8efec;
+    --ink-dim: #a9bab6;
+    --muted: #7b8f8b;
+    --line: #24312f;
+    --line-strong: #33443f;
+    --accent: #35c894;
+    --accent-dim: #1d6b52;
+    --alert: #f47a5c;
+    --warn: #e2a949;
+
+    --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.02em;
+    line-height: 1.02;
+  }
+
+  .tnum { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: clamp(9px, 0.85vw, 11px);
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* --- Deck shell ------------------------------------------------------- */
+  .deck { display: flex; flex-direction: column; }
+
+  .slide {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.5rem, 6vw, 6rem) clamp(4.5rem, 8vw, 6rem);
+    border-bottom: 1px solid var(--line);
+  }
+  /* Without JS every slide simply stacks and scrolls — the deck still reads. */
+  .deck.ready .slide { display: none; border-bottom: 0; }
+  .deck.ready .slide.active { display: flex; }
+
+  .slide-inner { width: 100%; max-width: 1180px; margin: 0 auto; }
+
+  /* --- Chrome ----------------------------------------------------------- */
+  .rail {
+    position: fixed;
+    inset: auto 0 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem clamp(1.5rem, 6vw, 6rem);
+    background: linear-gradient(to top, var(--ground) 62%, transparent);
+    z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 0.55rem; }
+  .brand-name { font-family: var(--display); font-weight: 800; font-size: 14px; letter-spacing: -0.01em; }
+  .dots { display: flex; gap: 0.4rem; }
+  .dot {
+    width: 26px; height: 3px; border-radius: 99px;
+    background: var(--line-strong); border: 0; padding: 0; cursor: pointer;
+    transition: background 0.25s ease;
+  }
+  .dot[aria-current="true"] { background: var(--accent); }
+  .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .hint { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+  /* --- Type scale ------------------------------------------------------- */
+  .kicker { color: var(--accent); }
+  .huge { font-size: clamp(2.3rem, 5.4vw, 4.4rem); font-weight: 800; }
+  .big  { font-size: clamp(1.9rem, 4.1vw, 3.3rem); font-weight: 800; }
+  .lede { font-size: clamp(1rem, 1.55vw, 1.28rem); line-height: 1.55; color: var(--ink-dim); max-width: 46ch; }
+  .note { font-size: clamp(0.82rem, 1.05vw, 0.95rem); color: var(--muted); line-height: 1.6; }
+
+  .two-col {
+    display: grid;
+    gap: clamp(1.5rem, 4vw, 3.5rem);
+    grid-template-columns: 1fr;
+    align-items: center;
+  }
+  @media (min-width: 950px) { .two-col { grid-template-columns: 1.05fr 0.95fr; } }
+
+  /* --- Slide 1: the bill fragment --------------------------------------- */
+  .statement {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: clamp(10px, 1.05vw, 13px);
+  }
+  .statement-head {
+    display: flex; justify-content: space-between; gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: clamp(9px, 0.85vw, 11px);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 4.6em 1fr auto;
+    gap: 0.9rem;
+    align-items: baseline;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .amt { font-variant-numeric: tabular-nums; }
+  .row.flag { background: rgba(244, 122, 92, 0.09); }
+  .row.flag .desc, .row.flag .amt { color: var(--alert); }
+  .tag {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid rgba(244, 122, 92, 0.45);
+    border-radius: 99px;
+    font-size: 0.78em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--alert);
+    white-space: nowrap;
+  }
+
+  /* --- Slide 2: pipeline ------------------------------------------------ */
+  .pipeline { display: grid; gap: 0.6rem; grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 760px) { .pipeline { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 1100px) { .pipeline { grid-template-columns: repeat(6, 1fr); } }
+
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 2px solid var(--accent-dim);
+    border-radius: 8px;
+    padding: 0.85rem 0.9rem 1rem;
+  }
+  .stage.human { border-top-color: var(--warn); }
+  .stage.gate  { border-top-color: var(--alert); }
+  .stage-n { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.1em; }
+  .stage-name { font-family: var(--display); font-weight: 700; font-size: clamp(0.95rem, 1.25vw, 1.1rem); margin-top: 0.15rem; }
+  .stage-by { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent); margin-top: 0.3rem; }
+  .stage.human .stage-by { color: var(--warn); }
+  .stage.gate .stage-by { color: var(--alert); }
+  .stage-what { font-size: clamp(0.74rem, 0.95vw, 0.84rem); color: var(--muted); margin-top: 0.45rem; line-height: 1.45; }
+
+  .outcome {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: clamp(0.8rem, 2.5vw, 2.2rem);
+    margin-top: clamp(1.5rem, 3vw, 2.4rem);
+    padding-top: clamp(1.2rem, 2.5vw, 1.8rem);
+    border-top: 1px solid var(--line);
+  }
+  .fig-label { display: block; }
+  .fig { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1; }
+  .fig.was { font-size: clamp(1.5rem, 3vw, 2.4rem); color: var(--muted); text-decoration: line-through; text-decoration-color: var(--alert); text-decoration-thickness: 2px; }
+  .fig.now { font-size: clamp(2.2rem, 5vw, 3.9rem); color: var(--accent); }
+  .arrow { font-size: clamp(1.2rem, 2.4vw, 2rem); color: var(--line-strong); }
+
+  /* --- Slide 3: the boundary -------------------------------------------- */
+  .boundary { display: grid; gap: 0.9rem; grid-template-columns: 1fr; }
+  @media (min-width: 780px) { .boundary { grid-template-columns: 1fr 1fr; } }
+  .box { border-radius: 10px; padding: 1.1rem 1.2rem; border: 1px solid var(--line); background: var(--surface); }
+  .box.allow { border-color: rgba(53, 200, 148, 0.42); background: rgba(53, 200, 148, 0.06); }
+  .box.deny  { border-color: rgba(244, 122, 92, 0.42); background: rgba(244, 122, 92, 0.06); }
+  .box h3 { font-size: clamp(0.95rem, 1.3vw, 1.1rem); }
+  .box .eyebrow.allow-t { color: var(--accent); }
+  .box .eyebrow.deny-t { color: var(--alert); }
+  .tools { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.28rem; }
+  .tools li { font-family: var(--mono); font-size: clamp(0.74rem, 0.95vw, 0.85rem); color: var(--ink-dim); }
+  .verdict {
+    margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--line);
+    font-size: clamp(0.76rem, 0.95vw, 0.85rem); color: var(--muted); line-height: 1.55;
+  }
+  .code-403 {
+    font-family: var(--mono); font-weight: 600; color: var(--alert);
+    border: 1px solid rgba(244, 122, 92, 0.45); border-radius: 5px;
+    padding: 0.05rem 0.4rem; white-space: nowrap;
+  }
+
+  /* --- Slide 4: sponsors ------------------------------------------------ */
+  .sponsors { width: 100%; border-collapse: collapse; font-size: clamp(0.78rem, 1.05vw, 0.95rem); }
+  .sponsors th, .sponsors td { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .sponsors thead th {
+    font-family: var(--mono); font-size: clamp(9px, 0.82vw, 10.5px);
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); font-weight: 600;
+    border-bottom-color: var(--line-strong);
+  }
+  .sponsors tbody tr:last-child td { border-bottom: 0; }
+  .sponsors .who { font-weight: 600; white-space: nowrap; }
+  .sponsors .stage-col { font-family: var(--mono); font-size: 0.92em; color: var(--accent); white-space: nowrap; }
+  .sponsors td:last-child { color: var(--muted); }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+
+  .closer {
+    margin-top: clamp(1.2rem, 2.6vw, 2rem);
+    display: grid; gap: 0.7rem; grid-template-columns: 1fr;
+  }
+  @media (min-width: 820px) { .closer { grid-template-columns: repeat(3, 1fr); } }
+  .claim { border-left: 2px solid var(--accent); padding: 0.15rem 0 0.15rem 0.85rem; }
+  .claim b { display: block; font-family: var(--display); font-size: clamp(0.92rem, 1.2vw, 1.05rem); font-weight: 700; }
+  .claim span { font-size: clamp(0.76rem, 0.95vw, 0.86rem); color: var(--muted); line-height: 1.5; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- ================= 1. The problem ================= -->
+  <section class="slide active" id="s1" aria-label="The problem">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow kicker">Four in five hospital bills contain an error</p>
+        <h1 class="huge" style="margin-top:0.7rem; max-width:17ch;">Nobody reads the itemized bill.</h1>
+        <p class="lede" style="margin-top:1.3rem;">
+          Catching an error means knowing that CPT&nbsp;80053 already contains the creatinine assay
+          billed three lines below it, and that a hospital cannot charge you separately for the
+          surgical tray.
+        </p>
+        <p class="lede" style="margin-top:0.9rem;">
+          The people who know that work for the hospital. So the errors stand.
+        </p>
+      </div>
+
+      <div>
+        <p class="eyebrow" style="margin-bottom:0.6rem;">St. Meridian Regional — account SMR-2026-448193</p>
+        <div class="statement">
+          <div class="statement-head"><span>Code · Description</span><span>Charge</span></div>
+          <div class="row"><span>99285</span><span class="desc">Emergency dept visit, highest complexity</span><span class="amt">3,200.00</span></div>
+          <div class="row flag"><span>99285</span><span class="desc">Emergency dept visit, highest complexity<span class="tag">billed twice</span></span><span class="amt">3,200.00</span></div>
+          <div class="row"><span>80053</span><span class="desc">Comprehensive metabolic panel</span><span class="amt">485.00</span></div>
+          <div class="row flag"><span>82565</span><span class="desc">Creatinine, blood<span class="tag">already in 80053</span></span><span class="amt">185.00</span></div>
+          <div class="row flag"><span>J7030</span><span class="desc">IV fluid, saline 1000 ml × 8<span class="tag">91× list</span></span><span class="amt">1,096.00</span></div>
+          <div class="row flag"><span>A4550</span><span class="desc">Surgical tray<span class="tag">facility fee</span></span><span class="amt">410.00</span></div>
+        </div>
+        <p class="note" style="margin-top:0.7rem;">
+          One real emergency-room statement. Six of nineteen lines are wrong before anyone argues
+          about price.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. What it does ================= -->
+  <section class="slide" id="s2" aria-label="What BillShield does">
+    <div class="slide-inner">
+      <p class="eyebrow kicker">BillShield</p>
+      <h2 class="big" style="margin-top:0.6rem;">Bill in. Signed dispute out.</h2>
+      <p class="lede" style="margin-top:0.9rem; max-width:62ch;">
+        Six APIs, one pipeline. It stops twice — once when extraction isn't sure, once at the
+        signature — and both stops are a person, not a prompt.
+      </p>
+
+      <div class="pipeline" style="margin-top:clamp(1.3rem,3vw,2.1rem);">
+        <div class="stage">
+          <div class="stage-n">01</div>
+          <div class="stage-name">Extract</div>
+          <div class="stage-by">Nutrient DWS</div>
+          <p class="stage-what">Typed line items, confidence per field</p>
+        </div>
+        <div class="stage human">
+          <div class="stage-n">02</div>
+          <div class="stage-name">Review</div>
+          <div class="stage-by">Human</div>
+          <p class="stage-what">Anything under 0.90 stops here</p>
+        </div>
+        <div class="stage">
+          <div class="stage-n">03</div>
+          <div class="stage-name">Audit</div>
+          <div class="stage-by">Claude</div>
+          <p class="stage-what">Judgement over a rules engine</p>
+        </div>
+        <div class="stage">
+          <div class="stage-n">04</div>
+          <div class="stage-name">Benchmark</div>
+          <div class="stage-by">SerpApi</div>
+          <p class="stage-what">Live prices, cited in the letter</p>
+        </div>
+        <div class="stage">
+          <div class="stage-n">05</div>
+          <div class="stage-name">Draft</div>
+          <div class="stage-by">Doctavian</div>
+          <p class="stage-what">Branches, loops, calculates</p>
+        </div>
+        <div class="stage gate">
+          <div class="stage-n">06</div>
+          <div class="stage-name">Sign</div>
+          <div class="stage-by">Foxit eSign</div>
+          <p class="stage-what">A person, or nothing</p>
+        </div>
+      </div>
+
+      <div class="outcome">
+        <span>
+          <span class="eyebrow fig-label">Billed</span>
+          <span class="fig was">$18,400</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span>
+          <span class="eyebrow fig-label">Corrected balance requested</span>
+          <span class="fig now">$7,144</span>
+        </span>
+        <span style="flex:1 1 16ch; min-width:16ch;">
+          <span class="eyebrow fig-label">Backed by</span>
+          <span class="note">15 findings, each with its coding rule and dollar figure, in a signed PDF whose last page is the full processing trail.</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3. The boundary ================= -->
+  <section class="slide" id="s3" aria-label="The signing boundary">
+    <div class="slide-inner">
+      <p class="eyebrow kicker">The design decision we'd defend</p>
+      <h2 class="big" style="margin-top:0.6rem; max-width:20ch;">
+        The boundary isn't at signing. It's at <span style="color:var(--accent);">reversibility</span>.
+      </h2>
+      <p class="lede" style="margin-top:1rem; max-width:64ch;">
+        Generate the wrong letter, convert it, merge it, hash it — redo any of it and nothing in the
+        world has changed. A signature is different in kind: it is the agent making a legal assertion
+        in a person's name, and there is no undo.
+      </p>
+
+      <div class="boundary" style="margin-top:clamp(1.2rem,2.6vw,1.9rem);">
+        <div class="box allow">
+          <p class="eyebrow allow-t">The agent owns this</p>
+          <h3 style="margin-top:0.35rem;">Everything undoable</h3>
+          <ul class="tools">
+            <li>extract_data</li>
+            <li>generate_document</li>
+            <li>convert_document · merge_documents</li>
+            <li>hash_document</li>
+            <li>request_signature</li>
+          </ul>
+        </div>
+        <div class="box deny">
+          <p class="eyebrow deny-t">Withheld, in code</p>
+          <h3 style="margin-top:0.35rem;">apply_signature</h3>
+          <ul class="tools">
+            <li>needs a human confirmation</li>
+            <li>needs a single-use intent token</li>
+            <li>needs an unchanged document hash</li>
+          </ul>
+          <p class="verdict">
+            The agent holds none of the three. Press <em>Let the agent try to sign it</em> in the demo
+            and the API returns <span class="code-403">403</span>.
+          </p>
+        </div>
+      </div>
+
+      <p class="note" style="margin-top:1.1rem; max-width:76ch;">
+        So an agent that gets confused, is prompt-injected by a malicious bill, or simply loops can
+        waste tokens and write a bad letter. It cannot produce a <em>signed</em> one. We also hash
+        <em>before</em> presenting, so the signer sees the hash of what they're about to sign — and an
+        agent that alters the document in between invalidates its own envelope.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= 4. Sponsors + why it holds ================= -->
+  <section class="slide" id="s4" aria-label="Sponsors and resilience">
+    <div class="slide-inner">
+      <p class="eyebrow kicker">Six APIs, each doing what it's built for</p>
+      <h2 class="big" style="margin-top:0.6rem;">And any one of them can fail.</h2>
+
+      <div class="table-wrap" style="margin-top:clamp(1rem,2.4vw,1.6rem);">
+        <table class="sponsors">
+          <thead>
+            <tr><th>Sponsor</th><th>Stage</th><th>What it does here</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="who">Nutrient DWS</td><td class="stage-col">Extract</td><td>Typed extraction against our bill schema; drives the human-review gate</td></tr>
+            <tr><td class="who">Claude</td><td class="stage-col">Audit</td><td>Finds what rules can't; every finding clamped to real line items</td></tr>
+            <tr><td class="who">SerpApi</td><td class="stage-col">Benchmark</td><td>Live market prices with sources, embedded as evidence</td></tr>
+            <tr><td class="who">Doctavian</td><td class="stage-col">Draft</td><td>One template that branches, loops and calculates per bill</td></tr>
+            <tr><td class="who">Foxit eSign</td><td class="stage-col">Sign</td><td>The envelope, the hash, and the handoff to a person</td></tr>
+            <tr><td class="who">Xano</td><td class="stage-col">Record</td><td>Cases and the audit trail printed into the signed PDF</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="closer">
+        <div class="claim">
+          <b>Zero credentials</b>
+          <span>Every stage has a real fallback. The whole demo runs with the wifi off, and the UI says which mode each stage used.</span>
+        </div>
+        <div class="claim">
+          <b>Numbers don't move</b>
+          <span>Structural findings come from published coding rules with no model in the loop. Pull the API key and re-run.</span>
+        </div>
+        <div class="claim">
+          <b>Verifiable in 2 seconds</b>
+          <span><span class="tnum">pnpm smoke</span> runs all three bills and asserts both signing-boundary refusals.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="rail">
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3.2 5.2 6v5.6c0 4.2 2.9 8 6.8 9.2 3.9-1.2 6.8-5 6.8-9.2V6L12 3.2Z" stroke="#35c894" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M8.7 12.1l2.4 2.4 4.3-4.6" stroke="#35c894" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="brand-name">BillShield</span>
+  </div>
+  <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>
+  <span class="hint">← → to move</span>
+</div>
+
+<script>
+  (function () {
+    var deck = document.getElementById("deck");
+    var slides = Array.prototype.slice.call(deck.querySelectorAll(".slide"));
+    var dotWrap = document.getElementById("dots");
+    var index = 0;
+
+    // Only take over layout once JS is running; without it the slides stack.
+    deck.classList.add("ready");
+
+    var dots = slides.map(function (s, i) {
+      var b = document.createElement("button");
+      b.className = "dot";
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-label", "Slide " + (i + 1) + " of " + slides.length);
+      b.addEventListener("click", function () { go(i); });
+      dotWrap.appendChild(b);
+      return b;
+    });
+
+    function go(n) {
+      index = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach(function (s, i) { s.classList.toggle("active", i === index); });
+      dots.forEach(function (d, i) { d.setAttribute("aria-current", i === index ? "true" : "false"); });
+      window.scrollTo(0, 0);
+      if (location.hash !== "#" + (index + 1)) {
+        history.replaceState(null, "", "#" + (index + 1));
+      }
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go(index + 1); }
+      else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(index - 1); }
+      else if (e.key === "Home") { e.preventDefault(); go(0); }
+      else if (e.key === "End") { e.preventDefault(); go(slides.length - 1); }
+    });
+
+    var startX = null;
+    document.addEventListener("touchstart", function (e) { startX = e.touches[0].clientX; }, { passive: true });
+    document.addEventListener("touchend", function (e) {
+      if (startX === null) return;
+      var dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 55) go(index + (dx < 0 ? 1 : -1));
+      startX = null;
+    }, { passive: true });
+
+    function fromHash() {
+      var n = parseInt((location.hash || "").replace("#", ""), 10);
+      return isFinite(n) && n > 0 ? n - 1 : 0;
+    }
+    // Deep links and the back button are same-document navigations, so without
+    // this the hash changes and the deck stays put.
+    window.addEventListener("hashchange", function () {
+      var n = fromHash();
+      if (n !== index) go(n);
+    });
+    go(fromHash());
+  })();
+</script>
+</body>
+</html>
