@@ -36,20 +36,24 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 const CHECKS: Check[] = [
   {
-    name: "Claude",
-    envVars: ["ANTHROPIC_API_KEY"],
+    name: "Model endpoint",
+    envVars: ["LLM_BASE_URL"],
     probe: async () => {
+      const base = (process.env.LLM_BASE_URL ?? process.env.OPENAI_BASE_URL ?? "").trim().replace(/\/$/, "");
+      const key = (process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? "").trim();
+      const model = (process.env.LLM_MODEL ?? process.env.OPENAI_MODEL ?? "qwen3-8b").trim();
       const res = await withTimeout(
-        fetch("https://api.anthropic.com/v1/models?limit=1", {
-          headers: {
-            "x-api-key": process.env.ANTHROPIC_API_KEY!.trim(),
-            "anthropic-version": "2023-06-01",
-          },
-        }),
+        fetch(`${base}/models`, key ? { headers: { Authorization: `Bearer ${key}` } } : {}),
         10_000,
       );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return "credentials accepted";
+      if (!res.ok) throw new Error(`GET ${base}/models returned HTTP ${res.status}`);
+      const json = (await res.json()) as { data?: Array<{ id?: string }> };
+      const ids = (json.data ?? []).map((m) => m.id).filter(Boolean) as string[];
+      if (ids.length === 0) return `reachable; LLM_MODEL=${model}`;
+      const served = ids.some((id) => id === model || id.endsWith(`/${model}`));
+      return served
+        ? `serving ${model}`
+        : `reachable, but ${model} is NOT in the served list (${ids.slice(0, 3).join(", ")}${ids.length > 3 ? ", …" : ""})`;
     },
   },
   {

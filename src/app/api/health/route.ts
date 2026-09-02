@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { isDisabled, vendorConfigured, vendorStatuses } from "@/lib/config";
+import { LLM_MODEL, isDisabled, vendorConfigured, vendorStatuses } from "@/lib/config";
 import { VENDOR_LABEL, VENDOR_ROLE, type Vendor } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+/** Show the configured model id, trimmed of any org prefix, e.g. Qwen/Qwen3-8B. */
+function modelLabel(): string {
+  const model = LLM_MODEL();
+  const short = model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
+  return short.length > 22 ? `${short.slice(0, 21)}…` : short;
+}
 
 /**
  * Vendor status for the UI rail and the judges page.
@@ -18,7 +25,8 @@ export async function GET() {
     const configured = vendorConfigured(s.vendor);
     return {
       vendor: s.vendor,
-      label: VENDOR_LABEL[s.vendor as Vendor],
+      // The model is configurable, so name it rather than saying "LLM".
+      label: s.vendor === "llm" ? modelLabel() : VENDOR_LABEL[s.vendor as Vendor],
       role: VENDOR_ROLE[s.vendor as Vendor],
       configured,
       disabled,

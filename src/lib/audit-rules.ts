@@ -9,10 +9,10 @@ import type { AuditResult, Finding, LineItem, Severity } from "./types";
  * The deterministic audit engine.
  *
  * This is BillShield's floor, not its ceiling: it finds structural coding
- * errors from published billing rules alone, with no model in the loop. When
- * Claude is available it runs on top of these findings and adds the judgement
- * calls a rules engine can't make. When Claude is unavailable, the demo — and
- * the dispute letter — still works, and every number still traces to a rule.
+ * errors from published billing rules alone, with no model in the loop. When a
+ * model is reachable it runs on top of these findings and adds the judgement
+ * calls a rules engine can't make. When it isn't, the demo — and the dispute
+ * letter — still works, and every number still traces to a rule.
  */
 
 /** Procedure bundles: billing the parent already pays for the children. */

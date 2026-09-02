@@ -22,7 +22,7 @@ export interface AdapterResult<T> {
 
 export type Vendor =
   | "nutrient"
-  | "anthropic"
+  | "llm"
   | "serpapi"
   | "doctavian"
   | "foxit"
@@ -30,7 +30,7 @@ export type Vendor =
 
 export const VENDOR_LABEL: Record<Vendor, string> = {
   nutrient: "Nutrient DWS",
-  anthropic: "Claude",
+  llm: "LLM",
   serpapi: "SerpApi",
   doctavian: "Doctavian",
   foxit: "Foxit eSign",
@@ -41,7 +41,7 @@ export const VENDOR_LABEL: Record<Vendor, string> = {
 export const VENDOR_ROLE: Record<Vendor, string> = {
   nutrient:
     "Parses the bill into structured line items with per-field confidence, and drives the human-review gate.",
-  anthropic: "Reasons over the extracted lines to find billing errors.",
+  llm: "Reads the whole encounter and finds what the rules engine cannot, then argues each finding persuasively.",
   serpapi: "Pulls live market and reference pricing to prove each charge is inflated.",
   doctavian:
     "Generates the dispute letter from a branching template that loops over disputed lines and calculates totals.",

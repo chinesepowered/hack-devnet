@@ -5,7 +5,7 @@ import type { Vendor } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const VALID: Vendor[] = ["nutrient", "anthropic", "serpapi", "doctavian", "foxit", "xano"];
+const VALID: Vendor[] = ["nutrient", "llm", "serpapi", "doctavian", "foxit", "xano"];
 
 /**
  * The chaos switch.

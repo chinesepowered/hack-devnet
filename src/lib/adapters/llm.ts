@@ -1,28 +1,28 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import OpenAI from "openai";
 import { z } from "zod";
 
-import { ANTHROPIC_KEY, vendorLive, VENDOR_TIMEOUT_MS } from "../config";
+import { LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, vendorLive, VENDOR_TIMEOUT_MS } from "../config";
 import { stopwatch } from "../http";
 import { runAuditRules } from "../audit-rules";
 import { lookupReference } from "../fixtures/reference-prices";
 import type { AdapterResult, AuditResult, BillMeta, Finding, LineItem } from "../types";
 
 /**
- * Claude — the judgement layer on top of the rules engine.
+ * The model — the judgement layer on top of the rules engine.
  *
- * The rules engine finds what is mechanically checkable. Claude's job is the
- * part a table lookup cannot do: read the encounter as a whole, decide whether
- * a charge makes clinical sense, and write the paragraph a billing manager
- * will actually act on.
+ * Any OpenAI-compatible endpoint: vLLM, Ollama, Together, OpenRouter, LM
+ * Studio, or OpenAI itself. Point LLM_BASE_URL at it, set LLM_MODEL, and go.
  *
- * It never runs unsupervised. Every finding Claude returns must reference real
- * line ids and a positive dollar amount, and its disputed totals are clamped to
- * what those lines were actually charged — a hallucinated number cannot reach
- * the letter.
+ * The rules engine finds what is mechanically checkable. The model's job is
+ * the part a table lookup cannot do: read the encounter as a whole, decide
+ * whether a charge makes clinical sense, and write the paragraph a billing
+ * manager will actually act on.
+ *
+ * It never runs unsupervised. Every finding it returns must reference real
+ * line ids and a positive dollar amount, and its disputed totals are clamped
+ * to what those lines were actually charged — a hallucinated number cannot
+ * reach the letter.
  */
-
-const MODEL = process.env.ANTHROPIC_MODEL?.trim() || "claude-opus-5";
 
 const FindingSchema = z.object({
   line_ids: z.array(z.string()).describe("ids of the line items this finding concerns"),
@@ -52,7 +52,6 @@ const AuditSchema = z.object({
   additional_findings: z
     .array(FindingSchema)
     .describe("issues the rules engine did not already catch; empty array is fine"),
-  /** Claude rewrites the machine-written rationales into something persuasive. */
   improved_rationales: z.array(
     z.object({
       finding_id: z.string(),
@@ -60,6 +59,8 @@ const AuditSchema = z.object({
     }),
   ),
 });
+
+type AuditPayload = z.infer<typeof AuditSchema>;
 
 const SYSTEM = `You are a medical billing advocate reviewing an itemized hospital bill on behalf of a patient.
 
@@ -74,7 +75,9 @@ Hard rules:
 - Never invent a dollar amount. A finding's disputed_amount must not exceed the total charged on the lines it references.
 - Never invent a regulation. If you are not sure of the exact citation, describe the rule in words instead.
 - If you cannot find anything the engine missed, return an empty additional_findings array. An empty array is a good answer; a fabricated finding is not.
-- Be honest about uncertainty. A finding that needs the medical record to confirm should have a confidence below 0.6 and should say what document is needed.`;
+- Be honest about uncertainty. A finding that needs the medical record to confirm should have a confidence below 0.6 and should say what document is needed.
+
+Reply with a single JSON object and nothing else. No prose before or after, no markdown fences.`;
 
 function buildPrompt(meta: BillMeta, lines: LineItem[], base: Finding[]): string {
   const lineTable = lines
@@ -107,7 +110,157 @@ ${lineTable}
 FINDINGS ALREADY MADE BY THE RULES ENGINE
 ${existing || "(none)"}
 
-Review this encounter. Return additional findings the engine missed, and improved rationales for the findings above.`;
+Review this encounter. Return additional findings the engine missed, and improved rationales for the findings above.
+
+Return JSON shaped exactly like:
+{"summary": string,
+ "additional_findings": [{"line_ids": [string], "kind": "duplicate"|"upcoding"|"unbundling"|"phantom"|"price_gouging"|"quantity_error"|"not_covered_bundled", "severity": "high"|"medium"|"low", "title": string, "rationale": string, "disputed_amount": number, "citation": string, "confidence": number}],
+ "improved_rationales": [{"finding_id": string, "rationale": string}]}`;
+}
+
+// ---------------------------------------------------------------------------
+// Structured output, across servers that disagree about how to do it
+// ---------------------------------------------------------------------------
+
+/**
+ * OpenAI strict json_schema wants every object closed and every property
+ * required. zod's emitted schema marks optionals and omits the flag, so walk
+ * the tree and tighten it.
+ */
+function tightenSchema(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(tightenSchema);
+  if (!node || typeof node !== "object") return node;
+
+  const obj = { ...(node as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(obj)) obj[k] = tightenSchema(v);
+
+  if (obj.type === "object" && obj.properties && typeof obj.properties === "object") {
+    obj.additionalProperties = false;
+    obj.required = Object.keys(obj.properties as Record<string, unknown>);
+  }
+  // Draft-2020 keywords some servers reject on a strict schema.
+  delete obj.$schema;
+  delete obj.default;
+  return obj;
+}
+
+/**
+ * Qwen3 and other reasoning models emit a <think> block before the answer,
+ * and plenty of servers wrap JSON in markdown fences. Strip both, then take
+ * the outermost balanced object.
+ */
+export function extractJson(raw: string): string {
+  let text = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    // An unterminated think block means the model ran out of tokens mid-thought.
+    .replace(/<think>[\s\S]*$/i, "")
+    .replace(/^\s*```(?:json)?/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  const start = text.indexOf("{");
+  if (start === -1) return text;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (c === '"') inString = !inString;
+    if (inString) continue;
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return text.slice(start);
+}
+
+type ResponseFormatMode = "json_schema" | "json_object" | "none";
+
+function looksUnsupported(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  const message = String((err as { message?: string })?.message ?? err).toLowerCase();
+  // 400/404/422 plus any mention of the parameter we just tried.
+  return (
+    (status === 400 || status === 404 || status === 422 || status === 500) &&
+    /response_format|json_schema|schema|not supported|unsupported|unrecognized|invalid.*parameter/.test(
+      message,
+    )
+  );
+}
+
+/**
+ * Ask the model for the audit, degrading through the ways a server might
+ * support structured output. Compatible endpoints disagree a lot here: strict
+ * json_schema is best, json_object is common, and some support neither — so
+ * we try each and fall back to parsing JSON out of plain text.
+ */
+async function requestAudit(
+  client: OpenAI,
+  model: string,
+  prompt: string,
+): Promise<{ payload: AuditPayload; mode: ResponseFormatMode }> {
+  const jsonSchema = tightenSchema(z.toJSONSchema(AuditSchema, { io: "output" }));
+  const modes: ResponseFormatMode[] = ["json_schema", "json_object", "none"];
+  let lastError: unknown;
+
+  for (const mode of modes) {
+    const responseFormat =
+      mode === "json_schema"
+        ? ({
+            type: "json_schema",
+            json_schema: { name: "bill_audit", schema: jsonSchema, strict: true },
+          } as const)
+        : mode === "json_object"
+          ? ({ type: "json_object" } as const)
+          : undefined;
+
+    try {
+      const completion = await client.chat.completions.create({
+        model,
+        temperature: 0.2,
+        max_tokens: 8000,
+        messages: [
+          { role: "system", content: SYSTEM },
+          { role: "user", content: prompt },
+        ],
+        ...(responseFormat ? { response_format: responseFormat } : {}),
+        // Qwen3 reasoning is on by default on most servers and eats the token
+        // budget before the JSON lands. Harmless where the server ignores it.
+        ...(process.env.LLM_DISABLE_THINKING === "1"
+          ? { chat_template_kwargs: { enable_thinking: false } }
+          : {}),
+      } as Parameters<typeof client.chat.completions.create>[0]);
+
+      const choice = (completion as OpenAI.Chat.Completions.ChatCompletion).choices?.[0];
+      const text = choice?.message?.content ?? "";
+      if (!text.trim()) throw new Error("model returned an empty message");
+
+      const parsed = AuditSchema.safeParse(JSON.parse(extractJson(text)));
+      if (!parsed.success) {
+        throw new Error(`response did not match the audit schema: ${parsed.error.issues[0]?.message}`);
+      }
+      return { payload: parsed.data, mode };
+    } catch (err) {
+      lastError = err;
+      // Only step down when the server rejected the *parameter*; a genuine
+      // model or network failure should surface rather than retry three times.
+      if (mode !== "none" && looksUnsupported(err)) continue;
+      throw err;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 /**
@@ -147,54 +300,42 @@ export async function auditBill(
 ): Promise<AdapterResult<AuditResult>> {
   const elapsed = stopwatch();
 
-  // The rules engine always runs. Claude augments it; it never replaces it.
+  // The rules engine always runs. The model augments it; it never replaces it.
   const base = runAuditRules(lines);
 
-  if (!vendorLive("anthropic")) {
+  if (!vendorLive("llm")) {
     return {
       data: base,
-      vendor: "anthropic",
+      vendor: "llm",
       provenance: "fallback",
-      note: `no Anthropic key configured — ${base.findings.length} findings from the deterministic rules engine`,
+      note: `no model endpoint configured — ${base.findings.length} findings from the deterministic rules engine`,
       ms: elapsed(),
     };
   }
 
+  const model = LLM_MODEL();
+
   try {
-    const client = new Anthropic({
-      apiKey: ANTHROPIC_KEY(),
-      timeout: VENDOR_TIMEOUT_MS * 4,
+    const client = new OpenAI({
+      baseURL: LLM_BASE_URL(),
+      // Local servers often want no key at all, but the SDK requires a string.
+      apiKey: LLM_API_KEY() || "not-required",
+      timeout: VENDOR_TIMEOUT_MS * 6,
       maxRetries: 1,
     });
 
-    const response = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 8000,
-      system: SYSTEM,
-      // Thinking is on by default on Opus 5 — omitting the parameter runs
-      // adaptive, which is what we want for this kind of judgement call.
-      output_config: {
-        effort: "medium",
-        format: zodOutputFormat(AuditSchema),
-      },
-      messages: [{ role: "user", content: buildPrompt(meta, lines, base.findings) }],
-    });
+    const { payload, mode } = await requestAudit(
+      client,
+      model,
+      buildPrompt(meta, lines, base.findings),
+    );
 
-    if (response.stop_reason === "refusal") {
-      // stop_details is newer than this SDK's types; read it defensively.
-      const details = (response as { stop_details?: { category?: string } }).stop_details;
-      throw new Error(`model declined: ${details?.category ?? "unspecified"}`);
-    }
-
-    const parsed = response.parsed_output;
-    if (!parsed) throw new Error("model returned no parsable output");
-
-    const extra = parsed.additional_findings
+    const extra = payload.additional_findings
       .map((f, i) => acceptFinding(f, lines, i))
       .filter((f): f is Finding => f !== null);
 
     const rewrites = new Map(
-      parsed.improved_rationales.map((r) => [r.finding_id, r.rationale.trim()]),
+      payload.improved_rationales.map((r) => [r.finding_id, r.rationale.trim()]),
     );
     const improved = base.findings.map((f) =>
       rewrites.has(f.id) && rewrites.get(f.id)!.length > 40
@@ -205,7 +346,8 @@ export async function auditBill(
     const findings = [...improved, ...extra].sort(
       (a, b) => b.disputedAmount - a.disputedAmount,
     );
-    const rejected = parsed.additional_findings.length - extra.length;
+    const rejected = payload.additional_findings.length - extra.length;
+    const applied = improved.filter((f, i) => f.rationale !== base.findings[i].rationale).length;
 
     return {
       data: {
@@ -213,13 +355,14 @@ export async function auditBill(
         totalDisputed: Number(
           findings.reduce((s, f) => s + f.disputedAmount, 0).toFixed(2),
         ),
-        summary: parsed.summary.trim() || base.summary,
+        summary: payload.summary.trim() || base.summary,
       },
-      vendor: "anthropic",
+      vendor: "llm",
       provenance: "live",
       note:
-        `${MODEL} reviewed ${lines.length} lines: ${base.findings.length} rules-engine findings kept, ` +
-        `${extra.length} added, ${rewrites.size} rationales rewritten` +
+        `${model} reviewed ${lines.length} lines via ${mode === "none" ? "plain completion" : mode}: ` +
+        `${base.findings.length} rules-engine findings kept, ${extra.length} added, ` +
+        `${applied} rationales rewritten` +
         (rejected > 0 ? `, ${rejected} rejected as unverifiable` : ""),
       ms: elapsed(),
     };
@@ -227,9 +370,9 @@ export async function auditBill(
     const reason = err instanceof Error ? err.message : String(err);
     return {
       data: base,
-      vendor: "anthropic",
+      vendor: "llm",
       provenance: "fallback",
-      note: `Claude unavailable (${reason}) — ${base.findings.length} findings from the deterministic rules engine`,
+      note: `${model} unavailable (${reason}) — ${base.findings.length} findings from the deterministic rules engine`,
       ms: elapsed(),
     };
   }

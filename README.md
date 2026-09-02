@@ -36,9 +36,9 @@ which system did what, and where a person stood behind it.
 Three design decisions carry the build:
 
 - **The audit is a rules engine, not a prompt.** Structural findings come from published coding
-  rules with no model in the loop. Claude runs on top and never instead; every finding it returns is
-  validated against real line IDs and clamped to what those lines were charged. Pull the API key and
-  the numbers don't move.
+  rules with no model in the loop. The model runs on top and never instead; every finding it returns
+  is validated against real line IDs and clamped to what those lines were charged. Point it at a dead
+  endpoint and the numbers don't move.
 - **The signing boundary sits at reversibility.** The agent owns everything undoable and stops at
   the one thing that isn't. It has no code path that can produce a signature.
 - **Every vendor can fail.** Each stage degrades to a real fallback and says so on screen.
@@ -50,7 +50,7 @@ Three design decisions carry the build:
 | Sponsor | Stage it owns | What breaks without it | Where |
 |---|---|---|---|
 | **Nutrient DWS** | Document intake | Typed extraction with per-field confidence, and the human-review gate it triggers | `src/lib/adapters/nutrient.ts` |
-| **Claude** | Judgement over the rules engine | Findings a table lookup can't make, and the persuasive rewrite of every rationale | `src/lib/adapters/llm.ts` |
+| **Qwen3** (any OpenAI-compatible endpoint) | Judgement over the rules engine | Findings a table lookup can't make, and the persuasive rewrite of every rationale | `src/lib/adapters/llm.ts` |
 | **SerpApi** | Price evidence | Live market prices with sources, embedded in the letter | `src/lib/adapters/serpapi.ts` |
 | **Doctavian** | Document generation | A letter that branches, loops, and calculates per bill | `src/lib/letter-template.ts`, `adapters/doctavian.ts` |
 | **Foxit eSign** | The signing boundary | The envelope, the hash, and the handoff to a person | `src/lib/adapters/foxit.ts` |
@@ -82,21 +82,30 @@ and the timestamp land in the audit trail.
 > **Verify it:** watch the Extraction stage, then the Review gate that holds everything until a
 > person answers. On the ER sample, 5 of 19 rows stop there.
 
-### Claude — the judgement layer
+### The model — the judgement layer
 
 `src/lib/audit-rules.ts` runs first and always: duplicates, multiple E/M codes for one encounter,
 panels billed with their own components, bundled supplies, imaging of a body region nothing else on
 the bill treats, impossible quantities, and markup above a threshold that scales by service type.
 
-Claude (`claude-opus-5`, structured outputs via Zod) then reads the whole encounter and does two
-things the rules engine can't: finds what only makes sense in context — a chest X-ray on a wrist
-injury — and rewrites the machine-authored rationales into the paragraph a billing manager will
-actually act on. **Every model finding is validated**: it must reference line IDs that exist, and
-its disputed amount is clamped to what those lines were charged. Anything else is rejected outright,
-and the stage note reports how many.
+An open-weight **Qwen3** model then reads the whole encounter and does two things the rules engine
+can't: it finds what only makes sense in context — a chest X-ray on a wrist injury — and rewrites
+the machine-authored rationales into the paragraph a billing manager will actually act on.
 
-> **Verify it:** the audit stage note reports findings kept, added, rewritten, and rejected. Then
-> pull the key and re-run — the structural numbers are identical.
+We talk to it over the **OpenAI-compatible chat completions API**, so it runs anywhere: vLLM,
+Ollama, LM Studio, OpenRouter, Together, or OpenAI itself. Set `LLM_BASE_URL`, `LLM_MODEL`, and
+optionally `LLM_API_KEY`. Compatible servers disagree about structured output, so the adapter tries
+strict `json_schema`, steps down to `json_object` when the server rejects it, and falls back to
+parsing JSON out of a plain completion — stripping the `<think>` block Qwen3 emits and any markdown
+fence along the way. The stage note says which mode the server accepted.
+
+**Every model finding is validated**: it must reference line IDs that exist, and its disputed amount
+is clamped to what those lines were charged. Anything else is rejected outright, and the stage note
+reports how many.
+
+> **Verify it:** the audit stage note names the model, the structured-output mode, and the counts
+> kept / added / rewritten / rejected. Then point `LLM_BASE_URL` at nothing and re-run — the
+> structural numbers are identical.
 
 ### SerpApi — turning an opinion into evidence
 

@@ -53,7 +53,16 @@ export const FOXIT_BASE_URL = () =>
 export const XANO_BASE_URL = () => process.env.XANO_API_BASE_URL?.trim() ?? "";
 export const XANO_TOKEN = () => process.env.XANO_AUTH_TOKEN?.trim() ?? "";
 
-export const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY?.trim() ?? "";
+// Any OpenAI-compatible endpoint: vLLM, Ollama, Together, OpenRouter, LM
+// Studio, or OpenAI itself. OPENAI_* are accepted as aliases because most
+// compatible tooling already sets them.
+export const LLM_BASE_URL = () =>
+  (process.env.LLM_BASE_URL ?? process.env.OPENAI_BASE_URL)?.trim() ||
+  "https://api.openai.com/v1";
+export const LLM_API_KEY = () =>
+  (process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY)?.trim() ?? "";
+export const LLM_MODEL = () =>
+  (process.env.LLM_MODEL ?? process.env.OPENAI_MODEL)?.trim() || "qwen3-8b";
 
 /** Request timeout for every outbound vendor call. Keeps the demo moving. */
 export const VENDOR_TIMEOUT_MS = Number(process.env.VENDOR_TIMEOUT_MS ?? 12_000);
@@ -96,8 +105,9 @@ export function vendorConfigured(vendor: Vendor): boolean {
       return has("FOXIT_CLIENT_ID", "FOXIT_CLIENT_SECRET");
     case "xano":
       return has("XANO_API_BASE_URL");
-    case "anthropic":
-      return has("ANTHROPIC_API_KEY");
+    case "llm":
+      // A local server needs no key, so a base URL alone is enough to try.
+      return has("LLM_BASE_URL") || has("OPENAI_BASE_URL") || has("LLM_API_KEY") || has("OPENAI_API_KEY");
   }
 }
 
@@ -109,7 +119,7 @@ export function vendorLive(vendor: Vendor): boolean {
 export function vendorStatuses(): VendorConfig[] {
   const map: Record<Vendor, string[]> = {
     nutrient: ["NUTRIENT_DWS_API_KEY"],
-    anthropic: ["ANTHROPIC_API_KEY"],
+    llm: ["LLM_BASE_URL", "LLM_MODEL"],
     serpapi: ["SERPAPI_API_KEY"],
     doctavian: ["DOCTAVIAN_API_KEY"],
     foxit: ["FOXIT_CLIENT_ID", "FOXIT_CLIENT_SECRET"],

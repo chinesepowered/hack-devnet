@@ -52,9 +52,9 @@ Findings appear largest-first. Take the top three:
 - **$1,240 phantom visit** — three separate visit charges for a single encounter.
 
 > "None of this needs an AI. These are published coding rules, and they run with no model in the
-> loop. Claude sits on top and finds what the rules can't — like a chest X-ray on a wrist injury —
-> and rewrites the argument so a billing manager will act on it. Every number it returns is checked
-> against the real line items, so it can't invent one."
+> loop. An open-weight Qwen3 model sits on top and finds what the rules can't — like a chest X-ray
+> on a wrist injury — and rewrites the argument so a billing manager will act on it. Every number it
+> returns is checked against the real line items, so it can't invent one."
 
 ### 1:30 — The evidence
 
@@ -116,7 +116,13 @@ it.
 **"What if the AI hallucinates a charge?"**
 It can't reach the letter. Every model finding is validated against real line ids and clamped to
 what those lines were charged; the audit stage reports how many it rejected. And the structural
-findings come from a rules engine with no model in it — pull the API key and the numbers don't move.
+findings come from a rules engine with no model in it — point the endpoint at nothing and the
+numbers don't move.
+
+**"Which model, and why not a frontier one?"**
+Any OpenAI-compatible endpoint; we run an open-weight Qwen3. The rules engine does the work that has
+to be exact, so the model only needs contextual judgement and good English — which an 8B open model
+handles, self-hosted, with no patient billing data leaving your own infrastructure.
 
 **"Where do the reference prices come from?"**
 Medicare fee-schedule national averages as the anchor, live market data on top. Production would
@@ -141,4 +147,4 @@ signing boundary. Each is doing what it's built for.
 | A vendor hangs | It can't — every call has a 12s timeout and falls back. Say so out loud; it's the point. |
 | The page looks stale | `R` resets. If assets 404, a zombie server is serving an old build: `pkill -f next-server` and `pnpm start`. |
 | You want a clean slate | `R`, or restart the server — the local case store is in-process. |
-| Live demo feels risky | `DISABLE_VENDORS=nutrient,anthropic,serpapi,doctavian,foxit,xano` runs it fully offline, deterministically. |
+| Live demo feels risky | `DISABLE_VENDORS=nutrient,llm,serpapi,doctavian,foxit,xano` runs it fully offline, deterministically. |

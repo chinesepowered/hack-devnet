@@ -25,7 +25,7 @@ type Phase =
 const STEPS = [
   { key: "extract", label: "Extract", vendor: "Nutrient DWS" },
   { key: "review", label: "Review", vendor: "Human" },
-  { key: "audit", label: "Audit", vendor: "Claude" },
+  { key: "audit", label: "Audit", vendor: "LLM" },
   { key: "benchmark", label: "Benchmark", vendor: "SerpApi" },
   { key: "draft", label: "Draft", vendor: "Doctavian" },
   { key: "sign", label: "Sign", vendor: "Foxit eSign" },

@@ -28,9 +28,9 @@ const WORK: Array<{
     where: "src/lib/adapters/nutrient.ts",
   },
   {
-    vendor: "anthropic",
-    did: "Reads the whole encounter and finds what a rules engine cannot: services that make no clinical sense together, and the paragraph that will actually persuade a billing manager. Every finding it returns is validated against real line ids and clamped to what those lines were charged.",
-    verify: "The audit stage note reports how many findings Claude added and how many it rejected as unverifiable.",
+    vendor: "llm",
+    did: "Reads the whole encounter and finds what a rules engine cannot: services that make no clinical sense together, and the paragraph that will actually persuade a billing manager. Any OpenAI-compatible endpoint — we run an open-weight Qwen3 model. Every finding it returns is validated against real line ids and clamped to what those lines were charged.",
+    verify: "The audit stage note names the model, the structured-output mode the server accepted, and how many findings it added or rejected as unverifiable.",
     where: "src/lib/adapters/llm.ts",
   },
   {
