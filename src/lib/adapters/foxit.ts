@@ -52,7 +52,17 @@ interface IntentToken {
   issuedAt: number;
 }
 
-const pendingIntents = new Map<string, IntentToken>();
+/**
+ * Held on globalThis, not in module scope: Next.js reloads server modules
+ * between requests in dev, and a wiped map would drop the intent minted at
+ * preparation — making every signature fail the boundary check for reasons
+ * that have nothing to do with the boundary.
+ */
+const intentStore = globalThis as unknown as {
+  __billshieldIntents?: Map<string, IntentToken>;
+};
+const pendingIntents: Map<string, IntentToken> =
+  intentStore.__billshieldIntents ?? (intentStore.__billshieldIntents = new Map());
 
 export function sha256(bytes: Uint8Array | Buffer): string {
   return createHash("sha256").update(Buffer.from(bytes)).digest("hex");

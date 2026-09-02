@@ -255,12 +255,22 @@ export function Studio() {
     }
   };
 
+  /**
+   * Auto-pilot signs once, and only once.
+   *
+   * `sign()` clears `busy` on failure while leaving the phase at "signing", so
+   * without this guard a rejected signature re-triggers the effect and retries
+   * forever — a request loop that hammers the server in the middle of a demo.
+   * One attempt per case; if it fails, the error shows and the button is there.
+   */
+  const autoSigned = useRef<string | null>(null);
   useEffect(() => {
-    if (autoPilot && phase === "signing" && record && !busy) {
-      const t = setTimeout(() => void sign(record.meta.patientName), 2600);
-      return () => clearTimeout(t);
-    }
-    // sign is stable enough for this demo affordance; re-running is harmless.
+    if (!autoPilot || phase !== "signing" || !record || busy) return;
+    if (autoSigned.current === record.id) return;
+    autoSigned.current = record.id;
+    const t = setTimeout(() => void sign(record.meta.patientName), 2600);
+    return () => clearTimeout(t);
+    // sign is recreated each render; the ref above is what bounds this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPilot, phase, record?.id, busy]);
 
