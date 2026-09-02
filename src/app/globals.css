@@ -1,0 +1,286 @@
+@import "tailwindcss";
+
+/*
+ * BillShield visual system.
+ *
+ * Dark-first: the app chrome is a low-light control surface so the one thing
+ * that must read as paper — the dispute letter — actually looks like paper
+ * when it appears. Money recovered is the only green on screen; errors are
+ * the only red. Nothing else competes for those two colours.
+ */
+
+:root {
+  --paper: #0d1214;
+  --surface: #141c1f;
+  --surface-2: #1b2528;
+  --ink: #e8efec;
+  --ink-dim: #a9bab6;
+  --muted: #7b8f8b;
+  --line: #24312f;
+  --line-strong: #33443f;
+
+  --accent: #35c894;
+  --accent-dim: #1d6b52;
+  --accent-glow: rgba(53, 200, 148, 0.16);
+
+  --alert: #f47a5c;
+  --alert-dim: #7a3527;
+  --warn: #e2a949;
+  --warn-dim: #6d4f1c;
+  --info: #6cb6d9;
+
+  --shadow-lg: 0 18px 48px -12px rgba(0, 0, 0, 0.62);
+  --shadow-sm: 0 2px 10px -2px rgba(0, 0, 0, 0.45);
+}
+
+:root.light {
+  --paper: #f5f4f0;
+  --surface: #ffffff;
+  --surface-2: #faf9f6;
+  --ink: #12181a;
+  --ink-dim: #35434a;
+  --muted: #61716f;
+  --line: #e3e0d8;
+  --line-strong: #cdc9be;
+
+  --accent: #0a7a5a;
+  --accent-dim: #b7e2d3;
+  --accent-glow: rgba(10, 122, 90, 0.1);
+
+  --alert: #b4432b;
+  --alert-dim: #f3d3ca;
+  --warn: #96650e;
+  --warn-dim: #f3e3c4;
+  --info: #1f6f92;
+
+  --shadow-lg: 0 18px 44px -16px rgba(20, 30, 28, 0.22);
+  --shadow-sm: 0 1px 6px -1px rgba(20, 30, 28, 0.12);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-alert: var(--alert);
+  --color-alert-dim: var(--alert-dim);
+  --color-warn: var(--warn);
+  --color-warn-dim: var(--warn-dim);
+  --color-info: var(--info);
+
+  --font-display: var(--font-bricolage), "Arial Narrow", system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+html.light {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-bricolage), "Arial Narrow", system-ui, sans-serif;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.012em;
+}
+
+/* Numbers that sit in columns must not shimmy as they animate. */
+.tnum {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.eyebrow {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* --- Focus: visible, never removed ------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* --- Scrollbars --------------------------------------------------------- */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 99px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* --- Motion ------------------------------------------------------------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes pulse-warn {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--warn);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--warn-dim);
+    border-color: var(--warn);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.86);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes draw-signature {
+  from {
+    stroke-dashoffset: var(--dash);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.44s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-slide-in {
+  animation: slide-in-right 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-pop {
+  animation: pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-grow-x {
+  transform-origin: left;
+  animation: grow-x 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-pulse-warn {
+  animation: pulse-warn 1.9s ease-in-out infinite;
+}
+.animate-spin-slow {
+  animation: spin 1.1s linear infinite;
+}
+
+/* The shimmer that runs along an in-flight pipeline stage. */
+.stage-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+  animation: sweep 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .stage-sweep::after {
+    display: none;
+  }
+}
+
+/* --- The letter, which must read as paper in both themes ---------------- */
+.paper-sheet {
+  background: #fdfcf9;
+  color: #1a1f22;
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  box-shadow: var(--shadow-lg);
+}
+.paper-sheet strong {
+  color: #000;
+}
