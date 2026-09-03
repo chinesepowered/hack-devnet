@@ -533,7 +533,7 @@ function StageBadge({ stages, name }: { stages: StageInfo[]; name: string }) {
     <span className="flex items-center gap-2" title={stage.note}>
       <ProvenanceChip
         provenance={stage.provenance}
-        label={stage.provenance === "live" ? "live" : "fallback"}
+        label={stage.provenance === "live" ? "live" : "local"}
       />
       <span className="tnum text-[11px] text-muted">{stage.ms}ms</span>
     </span>

@@ -137,13 +137,13 @@ export function JudgesBoard() {
           return (
             <Panel
               key={w.vendor}
-              eyebrow={status?.mode === "live" ? "running live" : "running on fallback"}
+              eyebrow={status?.mode === "live" ? "running live" : "running on the built-in implementation"}
               title={status?.label ?? w.vendor}
               right={
                 status && (
                   <ProvenanceChip
                     provenance={status.mode === "live" ? "live" : "fallback"}
-                    label={status.mode}
+                    label={status.mode === "live" ? "live" : "local"}
                   />
                 )
               }
