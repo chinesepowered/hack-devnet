@@ -190,6 +190,7 @@ async function runOne(sampleId: string, writePdf: boolean) {
       signerName: extraction.data.meta.patientName,
       typedSignature: "Agent",
       auditLines: [],
+      provider: sig.data.provider,
       humanConfirmed: false,
     });
   } catch {
@@ -205,6 +206,7 @@ async function runOne(sampleId: string, writePdf: boolean) {
     signerName: extraction.data.meta.patientName,
     typedSignature: extraction.data.meta.patientName,
     auditLines: formatTrail(trail),
+    provider: sig.data.provider,
     humanConfirmed: true,
   });
   console.log(
@@ -220,6 +222,7 @@ async function runOne(sampleId: string, writePdf: boolean) {
       signerName: extraction.data.meta.patientName,
       typedSignature: "Replay",
       auditLines: [],
+      provider: sig.data.provider,
       humanConfirmed: true,
     });
   } catch {

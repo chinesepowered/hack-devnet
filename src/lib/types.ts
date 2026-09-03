@@ -201,6 +201,12 @@ export interface SignatureRequest {
   signedAt?: string;
   /** SHA-256 of the exact bytes that were sent for signature. */
   documentHash: string;
+  /**
+   * Who actually holds this envelope. Set from the outcome of the preparation
+   * call, never from whether credentials happen to be present — a signature
+   * block naming a provider that never saw the document is a false statement.
+   */
+  provider: "foxit" | "local";
 }
 
 // ---------------------------------------------------------------------------

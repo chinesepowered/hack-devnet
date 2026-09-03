@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { generateDisputeLetter } from "@/lib/adapters/doctavian";
+import { finalizeDocument } from "@/lib/adapters/foxit";
 import { getCase, trailEntry, updateCase } from "@/lib/adapters/xano";
 
 export const dynamic = "force-dynamic";
@@ -35,27 +36,41 @@ export async function POST(
     reviewedCount: reviewed.length,
   });
 
+  // The agent's last reversible act on the document itself: optimize it for
+  // delivery before anyone is asked to sign it, so the bytes that get hashed
+  // are the finished ones.
+  const finalized = await finalizeDocument(doc.data.pdfBase64);
+  const document = { ...doc.data, pdfBase64: finalized.data.pdfBase64 };
+
   const trail = [
     ...record.trail,
     trailEntry("Letter generation", doc.vendor, doc.provenance, doc.note),
+    trailEntry("Document finalization", finalized.vendor, finalized.provenance, finalized.note),
   ];
 
   const updated = await updateCase(id, {
-    document: doc.data,
+    document,
     status: "awaiting_signature",
     trail,
   });
 
   return NextResponse.json({
     // The PDF is large; the client fetches it from the pdf route instead.
-    case: updated ? { ...updated, document: { ...doc.data, pdfBase64: "" } } : updated,
-    document: { ...doc.data, pdfBase64: "" },
+    case: updated ? { ...updated, document: { ...document, pdfBase64: "" } } : updated,
+    document: { ...document, pdfBase64: "" },
     stage: {
       name: "generate",
       vendor: doc.vendor,
       provenance: doc.provenance,
       note: doc.note,
       ms: doc.ms,
+    },
+    finalize: {
+      name: "finalize",
+      vendor: finalized.vendor,
+      provenance: finalized.provenance,
+      note: finalized.note,
+      ms: finalized.ms,
     },
   });
 }

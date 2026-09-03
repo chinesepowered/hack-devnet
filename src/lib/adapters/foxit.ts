@@ -169,9 +169,12 @@ export async function requestSignature(
       }, DOC_TIMEOUT_MS);
 
       if (!res.ok) {
-        const detail = await res.text().catch(() => "");
+        const raw = await res.text().catch(() => "");
+        // Gateway errors come back as full HTML pages; a wall of markup in the
+        // audit trail hides the one number that matters.
+        const detail = /^\s*</.test(raw) ? "" : ` ${raw.slice(0, 140)}`;
         throw new VendorError(
-          `envelope creation failed: HTTP ${res.status} ${detail.slice(0, 160)}`,
+          `envelope creation failed: HTTP ${res.status}${detail}`,
           res.status,
         );
       }
@@ -203,6 +206,7 @@ export async function requestSignature(
           signingUrl,
           createdAt,
           documentHash,
+          provider: "foxit",
         },
         vendor: "foxit",
         provenance: "live",
@@ -220,6 +224,7 @@ export async function requestSignature(
           signingUrl: `/sign/${envelopeId}`,
           createdAt,
           documentHash,
+          provider: "local",
         },
         vendor: "foxit",
         provenance: "fallback",
@@ -238,6 +243,7 @@ export async function requestSignature(
       signingUrl: `/sign/${envelopeId}`,
       createdAt,
       documentHash,
+      provider: "local",
     },
     vendor: "foxit",
     provenance: "fallback",
@@ -259,6 +265,8 @@ export interface ApplySignatureInput {
   signerName: string;
   typedSignature: string;
   auditLines: string[];
+  /** Which system holds the envelope, from the preparation step. */
+  provider: "foxit" | "local";
   /**
    * Proof that a human initiated this. The API route sets it only when the
    * request arrives from the signing page with an explicit confirmation.
@@ -303,7 +311,8 @@ export async function applySignature(
   }
 
   const signedAt = new Date().toISOString();
-  const usedLive = vendorLive("foxit");
+  // Reflects where the envelope actually lives, not whether a key is present.
+  const usedLive = input.provider === "foxit";
 
   const stamp: SignatureStamp = {
     signerName: input.signerName,
@@ -333,6 +342,7 @@ export async function applySignature(
         createdAt: new Date(intent.issuedAt).toISOString(),
         signedAt,
         documentHash: currentHash,
+        provider: input.provider,
       },
       signedPdfBase64: Buffer.from(signedBytes).toString("base64"),
     },
@@ -341,6 +351,130 @@ export async function applySignature(
     note: `Signed by ${input.signerName} at ${stamp.signedAt} via ${stamp.provider}; hash verified against the prepared document`,
     ms: elapsed(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// PDF Services — the reversible document work, before the boundary
+// ---------------------------------------------------------------------------
+
+/**
+ * Finalize the generated letter through Foxit PDF Services.
+ *
+ * This is the agent's side of the boundary, and it is deliberately the kind of
+ * work that can be redone without consequence: upload the letter, optimize it
+ * for delivery, download the result. Run it twice and nothing in the world has
+ * changed. It happens before the document is hashed, so the bytes a human is
+ * later asked to sign are the finished ones.
+ *
+ * Async by design at Foxit's end: the operation returns a task id that has to
+ * be polled until the result document exists.
+ */
+export async function finalizeDocument(
+  pdfBase64: string,
+): Promise<AdapterResult<{ pdfBase64: string; bytesBefore: number; bytesAfter: number }>> {
+  const elapsed = stopwatch();
+  const before = Buffer.from(pdfBase64, "base64").length;
+  const unchanged = { pdfBase64, bytesBefore: before, bytesAfter: before };
+
+  if (!vendorLive("foxit")) {
+    return {
+      data: unchanged,
+      vendor: "foxit",
+      provenance: "fallback",
+      note: "no Foxit credentials configured — letter delivered as generated",
+      ms: elapsed(),
+    };
+  }
+
+  const base = FOXIT_BASE_URL().replace(/\/$/, "");
+  const auth = { client_id: FOXIT_CLIENT_ID(), client_secret: FOXIT_CLIENT_SECRET() };
+
+  try {
+    // 1. Upload.
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([new Uint8Array(Buffer.from(pdfBase64, "base64"))], { type: "application/pdf" }),
+      "dispute-letter.pdf",
+    );
+    const uploaded = await vendorFetch(
+      `${base}/pdf-services/api/documents/upload`,
+      { method: "POST", headers: auth, body: form },
+      DOC_TIMEOUT_MS,
+    );
+    if (!uploaded.ok) throw new VendorError(`upload failed: HTTP ${uploaded.status}`, uploaded.status);
+    const { documentId } = (await uploaded.json()) as { documentId?: string };
+    if (!documentId) throw new VendorError("upload returned no documentId");
+
+    // 2. Kick off the operation.
+    const started = await vendorFetch(
+      `${base}/pdf-services/api/documents/modify/pdf-compress`,
+      {
+        method: "POST",
+        headers: { ...auth, "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId, compressionLevel: "MEDIUM" }),
+      },
+      DOC_TIMEOUT_MS,
+    );
+    if (!started.ok) {
+      const detail = await started.text().catch(() => "");
+      throw new VendorError(`compress failed: HTTP ${started.status} ${detail.slice(0, 140)}`);
+    }
+    const { taskId } = (await started.json()) as { taskId?: string };
+    if (!taskId) throw new VendorError("compress returned no taskId");
+
+    // 3. Poll. Bounded, because a demo cannot wait forever on a queue.
+    let resultId: string | undefined;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await new Promise((r) => setTimeout(r, 1200));
+      const poll = await vendorFetch(`${base}/pdf-services/api/tasks/${taskId}`, { headers: auth });
+      if (!poll.ok) continue;
+      const task = (await poll.json()) as {
+        status?: string;
+        resultDocumentId?: string;
+        error?: { message?: string };
+      };
+      if (task.status === "COMPLETED") {
+        resultId = task.resultDocumentId;
+        break;
+      }
+      if (task.status === "FAILED") {
+        throw new VendorError(`task failed: ${task.error?.message ?? "unknown"}`);
+      }
+    }
+    if (!resultId) throw new VendorError("task did not complete in time");
+
+    // 4. Download the finished document.
+    const dl = await vendorFetch(
+      `${base}/pdf-services/api/documents/${resultId}/download`,
+      { headers: auth },
+      DOC_TIMEOUT_MS,
+    );
+    if (!dl.ok) throw new VendorError(`download failed: HTTP ${dl.status}`, dl.status);
+    const buf = Buffer.from(await dl.arrayBuffer());
+    if (!buf.subarray(0, 4).toString("latin1").startsWith("%PDF")) {
+      throw new VendorError("downloaded result is not a PDF");
+    }
+
+    return {
+      data: { pdfBase64: buf.toString("base64"), bytesBefore: before, bytesAfter: buf.length },
+      vendor: "foxit",
+      provenance: "live",
+      note:
+        `Optimized the letter through Foxit PDF Services (document ${documentId.slice(0, 10)}…, ` +
+        `task ${taskId.slice(0, 10)}…): ${(before / 1024).toFixed(1)}KB → ${(buf.length / 1024).toFixed(1)}KB`,
+      ms: elapsed(),
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return {
+      data: unchanged,
+      vendor: "foxit",
+      provenance: "fallback",
+      note: `Foxit PDF Services unavailable (${reason}) — letter delivered as generated`,
+      ms: elapsed(),
+    };
+  }
 }
 
 /** Exposed for the judges page: what the agent is and is not allowed to do. */

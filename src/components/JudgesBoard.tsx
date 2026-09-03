@@ -47,8 +47,8 @@ const WORK: Array<{
   },
   {
     vendor: "foxit",
-    did: "Carries the finished letter across the signing boundary. The agent may prepare an envelope and hash the document; it has no code path that can sign one. Signing requires a human confirmation, a matching intent token from the preparation step, and an unchanged document hash.",
-    verify: "Press 'Let the agent try to sign it' on any prepared document. The API returns 403.",
+    did: "Two roles. PDF Services does the agent's reversible document work: the generated letter is uploaded, optimized for delivery and downloaded back before anyone is asked to sign it, so the bytes that get hashed are the finished ones. eSign is the boundary itself — the agent may prepare an envelope and hash the document, but has no code path that can sign one. Signing needs a human confirmation, a matching intent token from the preparation step, and an unchanged hash. (Our credentials cover PDF Services; the eSign envelope endpoint is not provisioned on this account, so the ceremony runs locally — it still requires a human, and the trail and signature block say which system held the envelope.)",
+    verify: "Press 'Let the agent try to sign it' on any prepared document. The API returns 403. The audit trail names the real signature provider, never the one we merely hold keys for.",
     where: "src/lib/adapters/foxit.ts",
   },
   {

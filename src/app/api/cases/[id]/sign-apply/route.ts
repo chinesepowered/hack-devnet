@@ -62,6 +62,7 @@ export async function POST(
       signerName: record.meta.patientName,
       typedSignature: typed,
       auditLines: formatTrail(record.trail),
+      provider: record.signature.provider,
       // Set from the request body, which only the signing page sends.
       humanConfirmed: body.confirmed === true,
     });
