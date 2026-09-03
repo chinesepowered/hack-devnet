@@ -98,8 +98,8 @@ export function JudgesBoard() {
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-ink-dim">
           BillShield reads a hospital bill, finds the billing errors, prices them against published
           rates, writes a dispute letter, and takes it to a human signature. Six APIs each own one
-          stage of that pipeline. Every one of them has a working fallback, and the interface always
-          says which is running.
+          stage of that pipeline. Every one of them has a working built-in implementation to fall
+          back on, and this page always says which of the two is running.
         </p>
       </header>
 
@@ -107,9 +107,8 @@ export function JudgesBoard() {
         <h2 className="text-[18px] font-bold">Kill any vendor and re-run</h2>
         <p className="mt-2 text-[13px] leading-relaxed text-ink-dim">
           Click a chip to switch that vendor off, then run the demo again. The pipeline completes
-          either way — the stage badge flips to <em>fallback</em> and the audit trail records why.
-          This is the difference between a demo that survives a conference wifi outage and one that
-          does not.
+          either way — this page flips to <em>local</em> and the audit trail records why. That is the
+          difference between a demo that survives a conference wifi outage and one that does not.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {statuses.map((s) => (

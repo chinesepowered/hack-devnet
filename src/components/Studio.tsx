@@ -7,7 +7,7 @@ import type { CaseRecord } from "@/lib/types";
 import { BillTable } from "./BillTable";
 import { EvidencePanel, FindingsPanel } from "./FindingsPanel";
 import { LetterPanel, SignGate } from "./LetterPanel";
-import { Button, CountUp, money, Panel, ProvenanceChip, Spinner } from "./primitives";
+import { Button, CountUp, money, Panel, Spinner } from "./primitives";
 import { ReviewGate } from "./ReviewGate";
 import { TrailRail, useVendorStatuses, VendorBar } from "./Rails";
 
@@ -526,16 +526,20 @@ function Stepper({ current }: { current: number }) {
   );
 }
 
+/**
+ * Stage timing only.
+ *
+ * The live/local chip used to sit here too. It is redundant in this view — the
+ * audit trail beside it already names the system that ran each stage and why —
+ * and it read as an apology mid-demo. Provenance still lives in the trail, in
+ * the signed PDF's audit page, and on /judges.
+ */
 function StageBadge({ stages, name }: { stages: StageInfo[]; name: string }) {
   const stage = stages.find((s) => s.name === name);
   if (!stage) return null;
   return (
-    <span className="flex items-center gap-2" title={stage.note}>
-      <ProvenanceChip
-        provenance={stage.provenance}
-        label={stage.provenance === "live" ? "live" : "local"}
-      />
-      <span className="tnum text-[11px] text-muted">{stage.ms}ms</span>
+    <span className="tnum text-[11px] text-muted" title={stage.note}>
+      {stage.ms}ms
     </span>
   );
 }
