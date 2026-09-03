@@ -9,8 +9,31 @@ import type { AdapterResult, AuditTrailEntry, CaseRecord } from "../types";
  * fallback is an in-process store with identical semantics, so the dashboard
  * and the trail work on a laptop with no network at all.
  *
- * The in-memory store is deliberately capped: a demo machine left running for
- * two days should not accumulate unbounded state.
+ * ---------------------------------------------------------------------------
+ * SHAPED FOR XANO'S AUTO-GENERATED CRUD
+ * ---------------------------------------------------------------------------
+ * Xano gives every table an integer primary key and can generate the five CRUD
+ * endpoints for it in one click. Our case ids are strings (`case_8f21ac03`), so
+ * rather than make someone hand-build endpoints keyed on a text column, we let
+ * Xano own the integer key and carry our own id in a `ref` column. The row id
+ * that comes back from the create call is remembered locally and used for the
+ * later PATCH.
+ *
+ * The queryable columns are denormalized for the dashboard; `data` holds the
+ * whole record so nothing is lost. Generated PDFs are stripped before sending:
+ * they are megabytes of base64, they do not round-trip reliably, and the demo
+ * only ever serves them from this process.
+ *
+ * Table `case`:
+ *   ref             text
+ *   status          text
+ *   patient         text
+ *   provider        text
+ *   billed_total    decimal
+ *   disputed_total  decimal
+ *   finding_count   int
+ *   signed          bool
+ *   data            json
  */
 
 const MAX_LOCAL_CASES = 50;
@@ -21,9 +44,26 @@ const MAX_LOCAL_CASES = 50;
  */
 const globalStore = globalThis as unknown as {
   __billshieldCases?: Map<string, CaseRecord>;
+  __billshieldRemoteIds?: Map<string, number>;
 };
 const localCases: Map<string, CaseRecord> =
   globalStore.__billshieldCases ?? (globalStore.__billshieldCases = new Map());
+/** Our case id → the integer row id Xano assigned it. */
+const remoteIds: Map<string, number> =
+  globalStore.__billshieldRemoteIds ?? (globalStore.__billshieldRemoteIds = new Map());
+
+interface CaseRow {
+  id?: number;
+  ref?: string;
+  status?: string;
+  patient?: string;
+  provider?: string;
+  billed_total?: number;
+  disputed_total?: number;
+  finding_count?: number;
+  signed?: boolean;
+  data?: CaseRecord | string;
+}
 
 function xanoUrl(path: string): string {
   return `${XANO_BASE_URL().replace(/\/$/, "")}${path}`;
@@ -36,110 +76,129 @@ function xanoHeaders(): Record<string, string> {
   return headers;
 }
 
+/** The row we send to Xano: queryable columns plus the record, minus the blob. */
+function toRow(record: CaseRecord): CaseRow {
+  const data: CaseRecord = record.document
+    ? { ...record, document: { ...record.document, pdfBase64: "" } }
+    : record;
+
+  return {
+    ref: record.id,
+    status: record.status,
+    patient: record.meta.patientName,
+    provider: record.meta.provider,
+    billed_total: record.billedTotal,
+    disputed_total: record.disputedTotal,
+    finding_count: record.findings.length,
+    signed: record.signature?.status === "signed",
+    data,
+  };
+}
+
+/** Rebuild a record from a row, tolerating `data` arriving as a JSON string. */
+function fromRow(row: CaseRow): CaseRecord | undefined {
+  if (!row?.data) return undefined;
+  try {
+    const parsed = typeof row.data === "string" ? (JSON.parse(row.data) as CaseRecord) : row.data;
+    return parsed?.id ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function trimLocalStore(): void {
   if (localCases.size <= MAX_LOCAL_CASES) return;
   const oldest = [...localCases.values()]
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .slice(0, localCases.size - MAX_LOCAL_CASES);
-  for (const c of oldest) localCases.delete(c.id);
+  for (const c of oldest) {
+    localCases.delete(c.id);
+    remoteIds.delete(c.id);
+  }
 }
 
 export async function saveCase(record: CaseRecord): Promise<AdapterResult<CaseRecord>> {
   const elapsed = stopwatch();
-
-  if (vendorLive("xano")) {
-    try {
-      const saved = await vendorJson<CaseRecord>(xanoUrl("/case"), {
-        method: "POST",
-        headers: xanoHeaders(),
-        body: JSON.stringify(withoutBlob(record)),
-      });
-      // Mirror locally so a mid-demo Xano outage cannot orphan an open case.
-      // `record` wins on the document, since Xano never receives the PDF bytes.
-      const merged = { ...record, ...saved, id: record.id, document: record.document };
-      localCases.set(record.id, merged);
-      trimLocalStore();
-      return {
-        data: merged,
-        vendor: "xano",
-        provenance: "live",
-        note: `Case ${record.id} persisted to Xano with ${record.trail.length} audit entries`,
-        ms: elapsed(),
-      };
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      localCases.set(record.id, record);
-      trimLocalStore();
-      return {
-        data: record,
-        vendor: "xano",
-        provenance: "fallback",
-        note: `Xano unavailable (${reason}) — case held in the local store`,
-        ms: elapsed(),
-      };
-    }
-  }
-
   localCases.set(record.id, record);
   trimLocalStore();
-  return {
-    data: record,
-    vendor: "xano",
-    provenance: "fallback",
-    note: `no Xano instance configured — case ${record.id} held in the local store`,
-    ms: elapsed(),
-  };
-}
 
-/**
- * Generated PDFs are megabytes of base64. Sending them to a records API is a
- * good way to hit a payload limit mid-demo, and they do not round-trip
- * reliably, so the document blob stays local and only its metadata is
- * persisted remotely.
- */
-function withoutBlob(record: Partial<CaseRecord>): Partial<CaseRecord> {
-  if (!record.document) return record;
-  return { ...record, document: { ...record.document, pdfBase64: "" } };
+  if (!vendorLive("xano")) {
+    return {
+      data: record,
+      vendor: "xano",
+      provenance: "fallback",
+      note: `no Xano instance configured — case ${record.id} held in the local store`,
+      ms: elapsed(),
+    };
+  }
+
+  try {
+    const saved = await vendorJson<CaseRow>(xanoUrl("/case"), {
+      method: "POST",
+      headers: xanoHeaders(),
+      body: JSON.stringify(toRow(record)),
+    });
+    if (typeof saved?.id === "number") remoteIds.set(record.id, saved.id);
+
+    return {
+      data: record,
+      vendor: "xano",
+      provenance: "live",
+      note:
+        `Case ${record.id} persisted to Xano as row ${saved?.id ?? "?"} ` +
+        `with ${record.trail.length} audit entries`,
+      ms: elapsed(),
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return {
+      data: record,
+      vendor: "xano",
+      provenance: "fallback",
+      note: `Xano unavailable (${reason}) — case held in the local store`,
+      ms: elapsed(),
+    };
+  }
 }
 
 export async function getCase(id: string): Promise<CaseRecord | undefined> {
   const local = localCases.get(id);
+  // The local mirror is authoritative for this process: it is the only place
+  // the generated PDF bytes exist, and every stage writes through it.
+  if (local) return local;
 
   if (vendorLive("xano")) {
     try {
-      const remote = await vendorJson<CaseRecord>(xanoUrl(`/case/${encodeURIComponent(id)}`), {
-        headers: xanoHeaders(),
-      });
-      if (remote?.id) {
-        // Xano is the record of truth for everything except the PDF bytes,
-        // which never left this process — merge rather than replace, or
-        // signing and download break whenever Xano is configured. Prefer the
-        // local mirror but keep whatever the remote holds when it is cold,
-        // rather than erasing bytes a previous build did persist.
-        const pdfBase64 =
-          local?.document?.pdfBase64 || remote.document?.pdfBase64 || "";
-        return remote.document
-          ? { ...remote, document: { ...remote.document, pdfBase64 } }
-          : { ...remote, document: local?.document };
+      const rows = await vendorJson<CaseRow[]>(xanoUrl("/case"), { headers: xanoHeaders() });
+      const row = Array.isArray(rows) ? rows.find((r) => r.ref === id) : undefined;
+      const record = row ? fromRow(row) : undefined;
+      if (record) {
+        if (typeof row?.id === "number") remoteIds.set(id, row.id);
+        return record;
       }
     } catch {
-      // Fall through to the local mirror.
+      // Nothing else to try.
     }
   }
-  return local;
+  return undefined;
 }
 
-export async function listCases(): Promise<{ cases: CaseRecord[]; provenance: "live" | "fallback" }> {
+export async function listCases(): Promise<{
+  cases: CaseRecord[];
+  provenance: "live" | "fallback";
+}> {
   if (vendorLive("xano")) {
     try {
-      const remote = await vendorJson<CaseRecord[]>(xanoUrl("/case"), {
-        headers: xanoHeaders(),
-      });
-      if (Array.isArray(remote)) {
-        return { cases: remote, provenance: "live" };
+      const rows = await vendorJson<CaseRow[]>(xanoUrl("/case"), { headers: xanoHeaders() });
+      if (Array.isArray(rows)) {
+        const cases = rows
+          .map(fromRow)
+          .filter((c): c is CaseRecord => Boolean(c))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        if (cases.length > 0) return { cases, provenance: "live" };
       }
     } catch {
-      // Fall through.
+      // Fall through to the mirror.
     }
   }
   return {
@@ -155,20 +214,22 @@ export async function updateCase(
   const existing = await getCase(id);
   if (!existing) return undefined;
   const merged: CaseRecord = { ...existing, ...patch, id };
+  localCases.set(id, merged);
 
-  if (vendorLive("xano")) {
+  const rowId = remoteIds.get(id);
+  if (vendorLive("xano") && rowId !== undefined) {
     try {
-      await vendorJson(xanoUrl(`/case/${encodeURIComponent(id)}`), {
+      // Xano's generated edit endpoint takes the integer row id in the path.
+      await vendorJson(xanoUrl(`/case/${rowId}`), {
         method: "PATCH",
         headers: xanoHeaders(),
-        body: JSON.stringify(withoutBlob(patch)),
+        body: JSON.stringify(toRow(merged)),
       });
     } catch {
-      // Local mirror below still reflects the change.
+      // The local mirror above already reflects the change.
     }
   }
 
-  localCases.set(id, merged);
   return merged;
 }
 
@@ -201,8 +262,7 @@ export function formatTrail(trail: AuditTrailEntry[]): string[] {
       timeStyle: "medium",
     });
     const who = e.actor ? `  [confirmed by ${e.actor}]` : "";
-    const source =
-      e.vendor === "system" ? "system" : `${e.vendor}/${e.provenance}`;
+    const source = e.vendor === "system" ? "system" : `${e.vendor}/${e.provenance}`;
     return `${String(i + 1).padStart(2, "0")}.  ${when}   ${e.stage}  (${source})  ${e.detail}${who}`;
   });
 }
