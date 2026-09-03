@@ -7,7 +7,7 @@ pnpm install
 pnpm dev          # http://localhost:3000 — then press D to run the whole demo
 ```
 
-No API keys required. `pnpm doctor` reports what will run live vs. fallback; `pnpm smoke` exercises the entire pipeline from the CLI in two seconds. **`/judges`** in the app is a live scorecard where you can kill any vendor and re-run.
+No API keys required. `pnpm preflight` reports what will run live vs. fallback; `pnpm smoke` exercises the entire pipeline from the CLI in two seconds. **`/judges`** in the app is a live scorecard where you can kill any vendor and re-run.
 
 ---
 
@@ -92,8 +92,9 @@ An open-weight **Qwen3** model then reads the whole encounter and does two thing
 can't: it finds what only makes sense in context — a chest X-ray on a wrist injury — and rewrites
 the machine-authored rationales into the paragraph a billing manager will actually act on.
 
-We talk to it over the **OpenAI-compatible chat completions API**, so it runs anywhere: vLLM,
-Ollama, LM Studio, OpenRouter, Together, or OpenAI itself. Set `LLM_BASE_URL`, `LLM_MODEL`, and
+We talk to it over the **OpenAI-compatible chat completions API**, so it runs anywhere: W&B
+Inference, vLLM, Ollama, LM Studio, OpenRouter, Together, or OpenAI itself. This build was developed
+against `Qwen/Qwen3.8-27B` on W&B Inference. Set `LLM_BASE_URL`, `LLM_MODEL`, and
 optionally `LLM_API_KEY`. Compatible servers disagree about structured output, so the adapter tries
 strict `json_schema`, steps down to `json_object` when the server rejects it, and falls back to
 parsing JSON out of a plain completion — stripping the `<think>` block Qwen3 emits and any markdown
@@ -171,7 +172,7 @@ persisted, and reads merge the local bytes back in.
 ## Verification
 
 ```bash
-pnpm doctor    # which vendors will run live; probes each credential
+pnpm preflight # which vendors will run live; probes each credential
 pnpm smoke     # all three bills through every stage, plus both boundary assertions
 pnpm shots     # walks the demo and writes screenshots to tmp-artifacts/
 ```

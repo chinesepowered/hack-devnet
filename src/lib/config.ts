@@ -63,6 +63,13 @@ export const LLM_API_KEY = () =>
   (process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY)?.trim() ?? "";
 export const LLM_MODEL = () =>
   (process.env.LLM_MODEL ?? process.env.OPENAI_MODEL)?.trim() || "qwen3-8b";
+/**
+ * The model gets its own, much longer budget than the other vendors. A
+ * reasoning model emitting a large structured object legitimately takes far
+ * longer than a REST call, and the shared 12s vendor timeout would drop it
+ * onto the fallback every time.
+ */
+export const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 120_000);
 
 /** Request timeout for every outbound vendor call. Keeps the demo moving. */
 export const VENDOR_TIMEOUT_MS = Number(process.env.VENDOR_TIMEOUT_MS ?? 12_000);

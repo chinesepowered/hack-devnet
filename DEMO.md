@@ -8,7 +8,7 @@ A three-minute walkthrough that works with zero credentials, and gets better wit
 
 ```bash
 pnpm install
-pnpm doctor     # what will run live vs fallback
+pnpm preflight  # what will run live vs fallback
 pnpm smoke      # proves the whole pipeline, ~2 seconds, no browser
 pnpm build && pnpm start
 ```

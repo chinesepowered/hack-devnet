@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-import { LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, vendorLive, VENDOR_TIMEOUT_MS } from "../config";
+import { LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_TIMEOUT_MS, vendorLive } from "../config";
 import { stopwatch } from "../http";
 import { runAuditRules } from "../audit-rules";
 import { lookupReference } from "../fixtures/reference-prices";
@@ -211,7 +211,14 @@ async function requestAudit(
   prompt: string,
 ): Promise<{ payload: AuditPayload; mode: ResponseFormatMode }> {
   const jsonSchema = tightenSchema(z.toJSONSchema(AuditSchema, { io: "output" }));
-  const modes: ResponseFormatMode[] = ["json_schema", "json_object", "none"];
+
+  // Probing costs a failed round trip per unsupported mode. Once you know what
+  // your server does, pin it with LLM_RESPONSE_FORMAT and skip straight to it.
+  const pinned = (process.env.LLM_RESPONSE_FORMAT ?? "").trim() as ResponseFormatMode | "";
+  const modes: ResponseFormatMode[] =
+    pinned === "json_schema" || pinned === "json_object" || pinned === "none"
+      ? [pinned]
+      : ["json_schema", "json_object", "none"];
   let lastError: unknown;
 
   for (const mode of modes) {
@@ -229,7 +236,7 @@ async function requestAudit(
       const completion = await client.chat.completions.create({
         model,
         temperature: 0.2,
-        max_tokens: 8000,
+        max_tokens: Number(process.env.LLM_MAX_TOKENS ?? 8000),
         messages: [
           { role: "system", content: SYSTEM },
           { role: "user", content: prompt },
@@ -242,9 +249,24 @@ async function requestAudit(
           : {}),
       } as Parameters<typeof client.chat.completions.create>[0]);
 
-      const choice = (completion as OpenAI.Chat.Completions.ChatCompletion).choices?.[0];
+      const done = completion as OpenAI.Chat.Completions.ChatCompletion;
+      const choice = done.choices?.[0];
       const text = choice?.message?.content ?? "";
-      if (!text.trim()) throw new Error("model returned an empty message");
+
+      if (!text.trim()) {
+        // A reasoning model can spend its whole budget thinking and return no
+        // content at all. Say so, because the fix is a setting, not a retry.
+        const reasoning = (choice?.message as { reasoning?: string } | undefined)?.reasoning ?? "";
+        if (choice?.finish_reason === "length" && reasoning.length > 0) {
+          throw new Error(
+            `model used all ${done.usage?.completion_tokens ?? "?"} completion tokens on reasoning and produced no answer — ` +
+              `set LLM_DISABLE_THINKING=1, or raise LLM_MAX_TOKENS`,
+          );
+        }
+        throw new Error(
+          `model returned an empty message (finish_reason=${choice?.finish_reason ?? "unknown"})`,
+        );
+      }
 
       const parsed = AuditSchema.safeParse(JSON.parse(extractJson(text)));
       if (!parsed.success) {
@@ -320,8 +342,10 @@ export async function auditBill(
       baseURL: LLM_BASE_URL(),
       // Local servers often want no key at all, but the SDK requires a string.
       apiKey: LLM_API_KEY() || "not-required",
-      timeout: VENDOR_TIMEOUT_MS * 6,
-      maxRetries: 1,
+      timeout: LLM_TIMEOUT_MS,
+      // A retry doubles the wall clock on a slow endpoint and the pipeline has
+      // a fallback anyway — better to fail once and move on.
+      maxRetries: 0,
     });
 
     const { payload, mode } = await requestAudit(

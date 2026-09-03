@@ -1,5 +1,8 @@
 /**
- * Pre-demo check: `pnpm doctor`
+ * Pre-demo check: `pnpm preflight`
+ *
+ * Named `preflight` rather than `doctor` because `pnpm doctor` is a built-in
+ * pnpm command and would shadow this script entirely.
  *
  * Reports which vendors will run live and which will fall back, and — for the
  * ones with credentials — actually reaches out to confirm the credentials
