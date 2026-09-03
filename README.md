@@ -2,6 +2,17 @@
 
 **Reads a hospital bill, finds the billing errors, proves the prices are inflated, and hands you a signed dispute letter with a record of every step.** Six sponsor APIs each own one stage of that pipeline. On the built-in emergency-room sample: **$18,400 billed → $7,144 owed.**
 
+## Run it
+
+```bash
+pnpm install
+cp .env.example .env.local   # add whichever credentials you have
+pnpm dev                     # http://localhost:3000 — press D to run the whole demo
+```
+
+`/judges` in the app is a live scorecard: what each API does here, and where to look in the running
+app to verify it.
+
 ---
 
 ## The problem
