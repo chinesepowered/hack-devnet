@@ -1,13 +1,6 @@
 # BillShield
 
-**Reads a hospital bill, finds the billing errors, proves the prices are inflated, and hands you a signed dispute letter with a record of every step.** Six sponsor APIs each own one stage of that pipeline, and every one of them has a working fallback, so the whole thing runs end to end on zero credentials. On the built-in emergency-room sample: **$18,400 billed → $7,144 owed.**
-
-```bash
-pnpm install
-pnpm dev          # http://localhost:3000 — then press D to run the whole demo
-```
-
-No API keys required. `pnpm preflight` reports what will run live vs. fallback; `pnpm smoke` exercises the entire pipeline from the CLI in two seconds. **`/judges`** in the app is a live scorecard where you can kill any vendor and re-run.
+**Reads a hospital bill, finds the billing errors, proves the prices are inflated, and hands you a signed dispute letter with a record of every step.** Six sponsor APIs each own one stage of that pipeline. On the built-in emergency-room sample: **$18,400 billed → $7,144 owed.**
 
 ---
 
@@ -33,7 +26,7 @@ its authority, and takes that letter to a **human signature**.
 What comes out is a signed, tamper-evident PDF whose last page is every step taken to produce it —
 which system did what, and where a person stood behind it.
 
-Three design decisions carry the build:
+Design decisions carry the build:
 
 - **The audit is a rules engine, not a prompt.** Structural findings come from published coding
   rules with no model in the loop. The model runs on top and never instead; every finding it returns
@@ -41,7 +34,6 @@ Three design decisions carry the build:
   endpoint and the numbers don't move.
 - **The signing boundary sits at reversibility.** The agent owns everything undoable and stops at
   the one thing that isn't. It has no code path that can produce a signature.
-- **Every vendor can fail.** Each stage degrades to a real fallback and says so on screen.
 
 ---
 
@@ -56,9 +48,7 @@ Three design decisions carry the build:
 | **Foxit eSign** | The signing boundary | The envelope, the hash, and the handoff to a person | `src/lib/adapters/foxit.ts` |
 | **Xano** | Backend of record | Cases, findings, and the audit trail printed into the signed PDF | `src/lib/adapters/xano.ts` |
 
-Every adapter returns an `AdapterResult` carrying not just data but **where the data came from** —
-`live` or `fallback`, with a human-readable note. The UI renders that provenance and the audit trail
-records it, so nothing on screen is a claim you can't verify.
+Every adapter returns an `AdapterResult` carrying not just data but **where the data came from**. The UI renders that provenance and the audit trail records it, so nothing on screen is a claim you can't verify.
 
 ---
 
