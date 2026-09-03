@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import {
+  DOC_TIMEOUT_MS,
   FOXIT_BASE_URL,
   FOXIT_CLIENT_ID,
   FOXIT_CLIENT_SECRET,
@@ -165,7 +166,7 @@ export async function requestSignature(
           sendNow: true,
           createEmbeddedSendingSession: true,
         }),
-      });
+      }, DOC_TIMEOUT_MS);
 
       if (!res.ok) {
         const detail = await res.text().catch(() => "");

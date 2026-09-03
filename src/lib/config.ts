@@ -71,8 +71,18 @@ export const LLM_MODEL = () =>
  */
 export const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 120_000);
 
-/** Request timeout for every outbound vendor call. Keeps the demo moving. */
+/** Request timeout for quick REST calls. Keeps the demo moving. */
 export const VENDOR_TIMEOUT_MS = Number(process.env.VENDOR_TIMEOUT_MS ?? 12_000);
+
+/**
+ * Document operations get their own, much longer budget.
+ *
+ * Uploading a PDF and having it OCR'd, understood, generated or wrapped in a
+ * signing envelope is not a REST call — DWS extraction alone spends ~7s of
+ * server time before the response starts. Holding those to the 12s default
+ * silently demoted every extraction to the OCR fallback.
+ */
+export const DOC_TIMEOUT_MS = Number(process.env.DOC_TIMEOUT_MS ?? 60_000);
 
 /**
  * Comma-separated list of vendors to force into fallback mode, e.g.

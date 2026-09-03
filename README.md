@@ -79,8 +79,9 @@ statement reads `MISC SUPPLY CHG`, not "Supplies and materials, unspecified", so
 exactly what drives a row to a human. The reviewer confirms, corrects, or removes it, and their name
 and the timestamp land in the audit trail.
 
-> **Verify it:** watch the Extraction stage, then the Review gate that holds everything until a
-> person answers. On the ER sample, 5 of 19 rows stop there.
+> **Verify it:** run `pnpm sample-pdf` and drag `sample-bills/er-wrist.pdf` into the drop zone —
+> that takes the live Data Extraction path rather than the built-in sample. Watch the Extraction
+> stage, then the Review gate that holds everything until a person answers. 5 of 19 rows stop there.
 
 ### The model — the judgement layer
 
@@ -100,9 +101,19 @@ strict `json_schema`, steps down to `json_object` when the server rejects it, an
 parsing JSON out of a plain completion — stripping the `<think>` block Qwen3 emits and any markdown
 fence along the way. The stage note says which mode the server accepted.
 
-**Every model finding is validated**: it must reference line IDs that exist, and its disputed amount
-is clamped to what those lines were charged. Anything else is rejected outright, and the stage note
-reports how many.
+**The division of labour is enforced in code, not just asked for in the prompt.** Pricing and E/M
+level belong to the rules engine — they're arithmetic against a published table with a deliberate
+tier policy, *including the deliberate decision not to flag a markup that's defensible for its class
+of service*. So `price_gouging` and `upcoding` findings from the model are rejected outright, as is
+any finding that merely restates a structural one the engine already made. Without that boundary the
+model re-opened the facility fee and turned a careful 62% dispute into an indiscriminate 95% one —
+which hands the provider the easiest possible rebuttal.
+
+**Every surviving model finding is then validated**: it must reference line IDs that exist, and its
+disputed amount is clamped to the dollars still *unclaimed* on those lines, so a line the engine
+already priced can't be disputed twice. On the ER sample the model contributes exactly one finding —
+a type-and-screen billed on a non-surgical wrist injury — which is precisely the clinical judgement
+a table lookup cannot make. The stage note reports what was kept, added, rewritten and rejected.
 
 > **Verify it:** the audit stage note names the model, the structured-output mode, and the counts
 > kept / added / rewritten / rejected. Then point `LLM_BASE_URL` at nothing and re-run — the

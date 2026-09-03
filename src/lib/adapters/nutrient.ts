@@ -1,4 +1,5 @@
 import {
+  DOC_TIMEOUT_MS,
   NUTRIENT_API_KEY,
   NUTRIENT_BASE_URL,
   NUTRIENT_EXTRACTION_KEY,
@@ -182,11 +183,15 @@ async function extractStructured(pdf: Buffer, filename: string): Promise<Extract
   form.append("file", new Blob([new Uint8Array(pdf)], { type: "application/pdf" }), filename);
   form.append("instructions", JSON.stringify({ schema: BILL_SCHEMA }));
 
-  const res = await vendorFetch(`${NUTRIENT_BASE_URL()}/extraction/extract`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${NUTRIENT_EXTRACTION_KEY()}` },
-    body: form,
-  });
+  const res = await vendorFetch(
+    `${NUTRIENT_BASE_URL()}/extraction/extract`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${NUTRIENT_EXTRACTION_KEY()}` },
+      body: form,
+    },
+    DOC_TIMEOUT_MS,
+  );
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -196,9 +201,21 @@ async function extractStructured(pdf: Buffer, filename: string): Promise<Extract
     );
   }
 
-  const json = (await res.json()) as ExtractedBill & { data?: ExtractedBill };
-  // The payload has been seen both bare and wrapped in `data`.
-  return json.data ?? json;
+  const json = (await res.json()) as {
+    output?: { data?: ExtractedBill };
+    data?: ExtractedBill;
+  } & ExtractedBill;
+
+  // DWS returns the extraction under `output.data`, alongside `configuration`
+  // and `metrics`. Accept the bare and `data` shapes too rather than depending
+  // on one envelope.
+  const bill = json.output?.data ?? json.data ?? json;
+  if (!bill?.line_items) {
+    throw new VendorError(
+      `extraction response had no line_items (keys: ${Object.keys(json).join(", ")})`,
+    );
+  }
+  return bill;
 }
 
 /** OCR a document through the Processor API and hand back its text layer. */
@@ -214,11 +231,15 @@ async function extractTextLive(pdf: Buffer, filename: string): Promise<string> {
     }),
   );
 
-  const res = await vendorFetch(`${NUTRIENT_BASE_URL()}/build`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${NUTRIENT_API_KEY()}` },
-    body: form,
-  });
+  const res = await vendorFetch(
+    `${NUTRIENT_BASE_URL()}/build`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${NUTRIENT_API_KEY()}` },
+      body: form,
+    },
+    DOC_TIMEOUT_MS,
+  );
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -387,7 +408,9 @@ export async function extractBill(
       },
       vendor: "nutrient",
       provenance: "live",
-      note: `OCR'd ${filename} via the DWS Processor API; parsed ${lines.length} line items`,
+      note:
+        `OCR'd ${filename} via the DWS Processor API; parsed ${lines.length} line items` +
+        (failures.length > 0 ? ` (after ${failures.join("; ")})` : ""),
       ms: elapsed(),
     };
   } catch (err) {

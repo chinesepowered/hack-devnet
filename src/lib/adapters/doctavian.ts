@@ -1,4 +1,5 @@
 import {
+  DOC_TIMEOUT_MS,
   DOCTAVIAN_API_KEY,
   DOCTAVIAN_BASE_URL,
   DOCTAVIAN_BEARER,
@@ -74,7 +75,11 @@ async function doctavianJson<T>(
   init: RequestInit,
   what: string,
 ): Promise<T> {
-  const res = await vendorFetch(`${DOCTAVIAN_BASE_URL().replace(/\/$/, "")}${path}`, init);
+  const res = await vendorFetch(
+    `${DOCTAVIAN_BASE_URL().replace(/\/$/, "")}${path}`,
+    init,
+    DOC_TIMEOUT_MS,
+  );
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new VendorError(`${what}: HTTP ${res.status} ${detail.slice(0, 200)}`, res.status);
@@ -160,6 +165,7 @@ export async function generateDisputeLetter(
     const dl = await vendorFetch(
       `${DOCTAVIAN_BASE_URL().replace(/\/$/, "")}/v1/documents/document/${encodeURIComponent(docUrn)}/download`,
       { headers: doctavianHeaders() },
+      DOC_TIMEOUT_MS,
     );
     if (!dl.ok) throw new VendorError(`document download failed: HTTP ${dl.status}`, dl.status);
 

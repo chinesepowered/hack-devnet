@@ -70,6 +70,12 @@ You are given the extracted line items and the findings a deterministic rules en
 
 2. Rewrite the engine's rationales so they read like a competent human advocate wrote them: specific, calm, factual, and citing the actual charge amounts and codes. No threats, no outrage, no invented facts.
 
+What the rules engine already owns, and you must NOT re-argue:
+- Pricing. It has already compared every charge against published reference rates using a tiered policy, and it deliberately leaves some markups alone because they are defensible for that class of service. A charge it did not flag on price was a judgement, not an oversight. Never return a price_gouging or upcoding finding.
+- Anything it already listed. Do not restate an existing finding with different wording or against a different line of the same encounter.
+
+Your job is the part it cannot do: clinical and contextual judgement. A service that makes no sense for this encounter, a sequence that cannot have happened, an item that contradicts another. If there is nothing of that kind, say so with an empty array.
+
 Hard rules:
 - Every line_id you reference must appear in the provided line items. Never invent one.
 - Never invent a dollar amount. A finding's disputed_amount must not exceed the total charged on the lines it references.
@@ -290,18 +296,75 @@ async function requestAudit(
  * Anything referencing an unknown line, or claiming more money than those
  * lines were charged, is rejected outright rather than trimmed silently.
  */
+/**
+ * How many dollars on each line nobody has claimed yet.
+ *
+ * The rules engine is careful never to dispute the same line twice, but model
+ * findings are produced independently and would otherwise be free to re-claim
+ * a line the engine already took a share of. Allocating what is already spent
+ * — pro rata across the lines each finding covers — is what stops the totals
+ * drifting toward "we dispute the entire bill".
+ */
+function remainingByLine(lines: LineItem[], claimed: Finding[]): Map<string, number> {
+  const remaining = new Map(lines.map((l) => [l.id, l.charged]));
+  const byId = new Map(lines.map((l) => [l.id, l]));
+
+  for (const f of claimed) {
+    const covered = f.lineIds.reduce((s, id) => s + (byId.get(id)?.charged ?? 0), 0);
+    for (const id of f.lineIds) {
+      const line = byId.get(id);
+      if (!line) continue;
+      const share =
+        covered > 0 ? (line.charged / covered) * f.disputedAmount : f.disputedAmount / f.lineIds.length;
+      remaining.set(id, Math.max(0, (remaining.get(id) ?? 0) - share));
+    }
+  }
+  return remaining;
+}
+
+/**
+ * Kinds the rules engine owns outright.
+ *
+ * Pricing and E/M level are arithmetic against a published table with a
+ * deliberate tier policy — including the deliberate decision NOT to flag a
+ * markup that is defensible for its class of service. Letting the model
+ * re-open those turns a careful 62% dispute into an indiscriminate 95% one,
+ * and hands the provider the easiest possible rebuttal.
+ */
+const ENGINE_OWNED: ReadonlySet<string> = new Set(["price_gouging", "upcoding"]);
+
 function acceptFinding(
   raw: z.infer<typeof FindingSchema>,
   lines: LineItem[],
   index: number,
+  remaining: Map<string, number>,
+  claimedLines: ReadonlySet<string>,
 ): Finding | null {
+  if (ENGINE_OWNED.has(raw.kind)) return null;
+
   const byId = new Map(lines.map((l) => [l.id, l]));
   const referenced = raw.line_ids.filter((id) => byId.has(id));
   if (referenced.length === 0) return null;
 
-  const ceiling = referenced.reduce((s, id) => s + (byId.get(id)?.charged ?? 0), 0);
+  // Every line is already the subject of a *structural* engine finding, so this
+  // restates it — possibly reworded and pointed at a neighbouring line's
+  // headroom. A line the engine merely priced is fair game: "this service was
+  // not warranted at all" is a different argument from "it costs too much",
+  // and the remaining-dollars clamp keeps the two from overlapping.
+  if (referenced.every((id) => claimedLines.has(id))) return null;
+
+  // Ceiling is what is left on those lines, not what they were charged.
+  const ceiling = referenced.reduce((s, id) => s + (remaining.get(id) ?? 0), 0);
   const amount = Math.min(Math.max(0, raw.disputed_amount), ceiling);
   if (amount < 1) return null;
+
+  // Spend it, so a second model finding cannot claim the same dollars.
+  const covered = referenced.reduce((s, id) => s + (byId.get(id)?.charged ?? 0), 0);
+  for (const id of referenced) {
+    const line = byId.get(id)!;
+    const share = covered > 0 ? (line.charged / covered) * amount : amount / referenced.length;
+    remaining.set(id, Math.max(0, (remaining.get(id) ?? 0) - share));
+  }
 
   return {
     id: `f-ai-${index + 1}`,
@@ -354,8 +417,14 @@ export async function auditBill(
       buildPrompt(meta, lines, base.findings),
     );
 
+    // Seeded with what the rules engine already claimed, then drawn down as
+    // each model finding is accepted.
+    const remaining = remainingByLine(lines, base.findings);
+    const claimedLines = new Set(
+      base.findings.filter((f) => f.kind !== "price_gouging").flatMap((f) => f.lineIds),
+    );
     const extra = payload.additional_findings
-      .map((f, i) => acceptFinding(f, lines, i))
+      .map((f, i) => acceptFinding(f, lines, i, remaining, claimedLines))
       .filter((f): f is Finding => f !== null);
 
     const rewrites = new Map(
@@ -387,7 +456,7 @@ export async function auditBill(
         `${model} reviewed ${lines.length} lines via ${mode === "none" ? "plain completion" : mode}: ` +
         `${base.findings.length} rules-engine findings kept, ${extra.length} added, ` +
         `${applied} rationales rewritten` +
-        (rejected > 0 ? `, ${rejected} rejected as unverifiable` : ""),
+        (rejected > 0 ? `, ${rejected} rejected as unverifiable or already covered` : ""),
       ms: elapsed(),
     };
   } catch (err) {

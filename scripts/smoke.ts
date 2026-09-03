@@ -106,6 +106,31 @@ async function runOne(sampleId: string, writePdf: boolean) {
     }
   }
 
+  // No line may have more disputed against it than it was charged. The rules
+  // engine guarantees this internally; model-added findings are allocated the
+  // same way, so the invariant has to hold across both.
+  const allocated = new Map<string, number>();
+  for (const f of audit.data.findings) {
+    const covered = f.lineIds.reduce(
+      (s, id) => s + (reviewed.find((l) => l.id === id)?.charged ?? 0),
+      0,
+    );
+    for (const id of f.lineIds) {
+      const line = reviewed.find((l) => l.id === id)!;
+      const share =
+        covered > 0 ? (line.charged / covered) * f.disputedAmount : f.disputedAmount / f.lineIds.length;
+      allocated.set(id, (allocated.get(id) ?? 0) + share);
+    }
+  }
+  for (const [id, amount] of allocated) {
+    const line = reviewed.find((l) => l.id === id)!;
+    if (amount > line.charged + 0.01) {
+      throw new Error(
+        `line ${id} (${line.code}) charged ${money(line.charged)} but ${money(amount)} is disputed against it`,
+      );
+    }
+  }
+
   for (const f of audit.data.findings) {
     console.log(
       `            · ${money(f.disputedAmount).padStart(12)}  ${f.kind.padEnd(20)} ${f.title.slice(0, 60)}`,
